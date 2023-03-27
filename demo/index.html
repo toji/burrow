@@ -1,0 +1,78 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+
+    <title>Burrow Renderer - Demo</title>
+
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        height: 100%;
+        background-color: #222222;
+      }
+
+      canvas {
+        position: absolute;
+        z-index: 0;
+        height: 100%;
+        width: 100%;
+        inset: 0;
+        margin: 0;
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <script type="module">
+      import { DeferredRenderer } from '../dist/deferred-renderer.js';
+
+      // Features to enable on the device if available.
+      const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
+
+      const adapter = await navigator.gpu.requestAdapter();
+
+      const requiredFeatures = [];
+      for (const feature of preferredFeatures) {
+        if (adapter.features.has(feature)) { requiredFeatures.push(feature); }
+      }
+
+      const device = await adapter.requestDevice({ requiredFeatures });
+
+      const canvas = document.querySelector('canvas');
+      const context = canvas.getContext('webgpu');
+      context.configure({
+        device,
+        format: navigator.gpu.getPreferredCanvasFormat(),
+        alphaMode: 'premultiplied',
+      });
+
+      const renderer = new DeferredRenderer(device);
+
+      function onResize() {
+        const dpr = Math.min(devicePixelRatio, 2);
+        canvas.width = canvas.offsetWidth * dpr;
+        canvas.height = canvas.offsetHeight * dpr;
+        renderer.resize(canvas.width, canvas.height);
+      }
+      onResize();
+      window.addEventListener('resize', onResize);
+
+      function onFrame(timestamp) {
+        requestAnimationFrame(onFrame);
+
+        const outputTexture = context.getCurrentTexture();
+
+        renderer.render(outputTexture);
+      }
+      requestAnimationFrame(onFrame);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "name": "burrow",
+  "description": "A toy WebGPU deferred renderer",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.21",
+    "typescript": "^4.9.3"
+  }
+}
