@@ -1,5 +1,15 @@
 import { TextureVisualizer } from './texture-visualizer.js'
 
+export enum DebugViewType {
+  none = "none",
+  all = "all",
+  rgba = "rgba",
+  normal = "normal",
+  metalRough = "metalRough",
+  light = "light",
+  depth = "depth",
+};
+
 export class DeferredRenderer {
   attachmentSize: GPUExtent3DDictStrict = { width: 0, height: 0 }
 
@@ -13,6 +23,8 @@ export class DeferredRenderer {
   depthAttachment: GPURenderPassDepthStencilAttachment;
 
   textureVisualizer: TextureVisualizer;
+
+  debugView: DebugViewType = DebugViewType.none;
 
   constructor(public device: GPUDevice) {
     this.textureVisualizer = new TextureVisualizer(device);
@@ -124,7 +136,12 @@ export class DeferredRenderer {
         loadOp: 'clear',
         storeOp: 'store',
         clearValue: [0.5, 0, 1, 1],
-      }]
+      }],
+      depthStencilAttachment: {
+        view: this.depthAttachment.view,
+        depthLoadOp: 'load',
+        depthStoreOp: 'store',
+      }
     });
 
     // Combine RGB/Lighting attachments
@@ -133,22 +150,54 @@ export class DeferredRenderer {
 
     // Profit???
 
-    outputPass.setViewport(0, 0, 256, 256, 0, 1);
-    this.textureVisualizer.render(outputPass, this.rgbaTexture);
-
-    outputPass.setViewport(256, 0, 256, 256, 0, 1);
-    this.textureVisualizer.render(outputPass, this.normalTexture);
-
-    outputPass.setViewport(512, 0, 256, 256, 0, 1);
-    this.textureVisualizer.render(outputPass, this.metalRoughTexture);
-
-    outputPass.setViewport(768, 0, 256, 256, 0, 1);
-    this.textureVisualizer.render(outputPass, this.lightTexture);
-
-    outputPass.setViewport(1024, 0, 256, 256, 0, 1);
-    this.textureVisualizer.render(outputPass, this.depthTexture);
-
     outputPass.end();
+
+    if (this.debugView != DebugViewType.none) {
+      const debugPass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: output.createView(),
+          loadOp: 'load',
+          storeOp: 'store',
+        }]
+      });
+
+      switch(this.debugView) {
+        case DebugViewType.all:
+          debugPass.setViewport(0, 0, 256, 256, 0, 1);
+          this.textureVisualizer.render(debugPass, this.rgbaTexture);
+
+          debugPass.setViewport(256, 0, 256, 256, 0, 1);
+          this.textureVisualizer.render(debugPass, this.normalTexture);
+
+          debugPass.setViewport(512, 0, 256, 256, 0, 1);
+          this.textureVisualizer.render(debugPass, this.metalRoughTexture);
+
+          debugPass.setViewport(768, 0, 256, 256, 0, 1);
+          this.textureVisualizer.render(debugPass, this.lightTexture);
+
+          debugPass.setViewport(1024, 0, 256, 256, 0, 1);
+          this.textureVisualizer.render(debugPass, this.depthTexture);
+          break;
+
+        case DebugViewType.rgba:
+          this.textureVisualizer.render(debugPass, this.rgbaTexture);
+          break;
+
+        case DebugViewType.normal:
+          this.textureVisualizer.render(debugPass, this.normalTexture);
+          break;
+
+        case DebugViewType.light:
+          this.textureVisualizer.render(debugPass, this.lightTexture);
+          break;
+
+        case DebugViewType.depth:
+          this.textureVisualizer.render(debugPass, this.depthTexture);
+          break;
+      }
+
+      debugPass.end();
+    }
 
     this.device.queue.submit([encoder.finish()]);
   }

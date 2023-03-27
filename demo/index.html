@@ -32,7 +32,9 @@
   <body>
     <canvas></canvas>
     <script type="module">
-      import { DeferredRenderer } from '../dist/deferred-renderer.js';
+      import 'https://cdn.jsdelivr.net/npm/tweakpane@3.1.0/dist/tweakpane.min.js';
+
+      import { DeferredRenderer, DebugViewType } from '../dist/deferred-renderer.js';
 
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
@@ -56,6 +58,45 @@
 
       const renderer = new DeferredRenderer(device);
 
+
+
+      // Debug panel
+      const debugPane = new Tweakpane.Pane({
+        title: 'Debug',
+      });
+
+      debugPane.addBlade({
+        label: 'debugView',
+        view: 'list',
+        options: DebugViewType,
+        value: renderer.debugView,
+      }).on('change', (ev) => {
+        renderer.debugView = ev.value;
+      });
+
+      const stats = {
+        fps: 0,
+        frameMs: 0
+      };
+
+      const statsFolder = debugPane.addFolder({
+        title: 'Stats',
+        expanded: true,
+      });
+      statsFolder.addMonitor(stats, 'fps', {
+        view: 'graph',
+        min: 0,
+        max: 90
+      });
+      statsFolder.addMonitor(stats, 'frameMs', {
+        view: 'graph',
+        min: 0,
+        max: 2
+      });
+
+
+
+
       function onResize() {
         const dpr = Math.min(devicePixelRatio, 2);
         canvas.width = canvas.offsetWidth * dpr;
@@ -65,12 +106,24 @@
       onResize();
       window.addEventListener('resize', onResize);
 
+      let frameCount = 0;
+      let lastFrameTime = performance.now();
       function onFrame(timestamp) {
         requestAnimationFrame(onFrame);
+        const frameStart = performance.now();
+        frameCount++;
 
         const outputTexture = context.getCurrentTexture();
 
         renderer.render(outputTexture);
+
+        const frameEnd = performance.now();
+        stats.frameMs = frameEnd - frameStart;
+        if (frameEnd - lastFrameTime > 1000) {
+          lastFrameTime = frameEnd;
+          stats.fps = frameCount;
+          frameCount = 0;
+        }
       }
       requestAnimationFrame(onFrame);
     </script>

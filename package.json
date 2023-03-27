@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.21",
+    "gl-matrix": "github:toji/gl-matrix#glmatrix-next",
     "typescript": "^4.9.3"
   }
 }
