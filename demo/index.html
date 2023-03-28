@@ -60,6 +60,7 @@
       const renderer = new DeferredRenderer(device);
 
       const camera = new OrbitCamera(canvas);
+      camera.distance = 3;
 
       // Debug panel
       const debugPane = new Tweakpane.Pane({

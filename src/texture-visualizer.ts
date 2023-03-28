@@ -21,58 +21,56 @@ export class TextureVisualizer {
     this.device = device;
     const shaderModule = device.createShaderModule({
       code: `
-        const pos : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
-            vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0),
-            vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
-        );
+        const pos : array<vec2f, 3> = array<vec2f, 3>(
+          vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
 
         struct VertexOut {
-            @builtin(position) position : vec4<f32>,
-            @location(0) texCoord : vec2<f32>,
+          @builtin(position) position : vec4f,
+          @location(0) texCoord : vec2f,
         };
 
         @vertex
         fn vertexMain(@builtin(vertex_index) vertexIndex : u32) -> VertexOut {
-            let p = pos[vertexIndex];
-            var output : VertexOut;
-            output.position = vec4<f32>(p, 0.0, 1.0);
-            output.texCoord = (vec2(p.x, -p.y) + vec2(1.0)) * vec2(0.5);
-            return output;
+          let p = pos[vertexIndex];
+          var output : VertexOut;
+          output.position = vec4f(p, 0.0, 1.0);
+          output.texCoord = (vec2(p.x, -p.y) + 1) * 0.5;
+          return output;
         }
 
         struct Uniforms {
-            range: vec2<f32>
+          range: vec2f
         };
         @group(0) @binding(2) var<uniform> uniforms : Uniforms;
 
         @group(0) @binding(0) var imgSampler : sampler;
 
-        fn hueToRgb(hue : f32) -> vec3<f32> {
-            let hueFract = fract(hue);
-            let rgb = vec3<f32>(
-                abs(hueFract * 6.0 - 3.0) - 1.0,
-                2.0 - abs(hueFract * 6.0 - 2.0),
-                2.0 - abs(hueFract * 6.0 - 4.0));
-            return saturate(rgb);
+        fn hueToRgb(hue : f32) -> vec3f {
+          let hueFract = fract(hue);
+          let rgb = vec3f(
+              abs(hueFract * 6.0 - 3.0) - 1.0,
+              2.0 - abs(hueFract * 6.0 - 2.0),
+              2.0 - abs(hueFract * 6.0 - 4.0));
+          return saturate(rgb);
         }
 
         @group(0) @binding(1) var img : texture_2d<f32>;
         @fragment
-        fn fragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
+        fn fragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
             return textureSample(img, imgSampler, texCoord);
         }
 
         @group(0) @binding(1) var depthImg : texture_depth_2d;
         @fragment
-        fn depthFragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
+        fn depthFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
             let depth = (textureSample(depthImg, imgSampler, texCoord) - uniforms.range.x) / (uniforms.range.y - uniforms.range.x);
             return vec4(depth, depth, depth, 1.0);
         }
 
         @group(0) @binding(1) var stencilImg : texture_2d<u32>;
         @fragment
-        fn stencilFragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
-            let sampleCoord = vec2<i32>(texCoord * vec2<f32>(textureDimensions(stencilImg)));
+        fn stencilFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
+            let sampleCoord = vec2<i32>(texCoord * vec2f(textureDimensions(stencilImg)));
             var stencil = (f32(textureLoad(stencilImg, sampleCoord, 0).x) - uniforms.range.x) / (uniforms.range.y - uniforms.range.x);
             if (stencil == 0.0) {
                 return vec4(0.0, 0.0, 0.0, 1.0);
@@ -83,11 +81,11 @@ export class TextureVisualizer {
 
         @group(0) @binding(1) var multiImg : texture_multisampled_2d<f32>;
         @fragment
-        fn multiFragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
+        fn multiFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
             let sampleCount = i32(textureNumSamples(multiImg));
-            let sampleCoord = vec2<i32>(texCoord * vec2<f32>(textureDimensions(multiImg)));
+            let sampleCoord = vec2<i32>(texCoord * vec2f(textureDimensions(multiImg)));
 
-            var accumValue : vec4<f32>;
+            var accumValue : vec4f;
             for (var i = 0i; i < sampleCount; i += 1i) {
                 accumValue += textureLoad(multiImg, sampleCoord, i);
             }
@@ -96,9 +94,9 @@ export class TextureVisualizer {
 
         @group(0) @binding(1) var multiDepthImg : texture_depth_multisampled_2d;
         @fragment
-        fn multiDepthFragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
+        fn multiDepthFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
             let sampleCount = i32(textureNumSamples(multiDepthImg));
-            let sampleCoord = vec2<i32>(texCoord * vec2<f32>(textureDimensions(multiDepthImg)));
+            let sampleCoord = vec2<i32>(texCoord * vec2f(textureDimensions(multiDepthImg)));
 
             var accumValue : f32;
             for (var i = 0i; i < sampleCount; i += 1i) {
@@ -111,9 +109,9 @@ export class TextureVisualizer {
 
         @group(0) @binding(1) var multiStencilImg : texture_multisampled_2d<u32>;
         @fragment
-        fn multiStencilFragmentMain(@location(0) texCoord : vec2<f32>) -> @location(0) vec4<f32> {
+        fn multiStencilFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
             let sampleCount = i32(textureNumSamples(multiStencilImg));
-            let sampleCoord = vec2<i32>(texCoord * vec2<f32>(textureDimensions(multiStencilImg)));
+            let sampleCoord = vec2<i32>(texCoord * vec2f(textureDimensions(multiStencilImg)));
 
             var accumValue : f32;
             for (var i = 0i; i < sampleCount; i += 1i) {
@@ -133,9 +131,6 @@ export class TextureVisualizer {
     const vertex: GPUVertexState = {
       module: shaderModule,
       entryPoint: 'vertexMain',
-    };
-    const primitive: GPUPrimitiveState = {
-      topology: 'triangle-strip',
     };
     const targets: GPUColorTargetState[] = [{
       format: colorFormat || navigator.gpu.getPreferredCanvasFormat(),
@@ -164,7 +159,6 @@ export class TextureVisualizer {
       return device.createRenderPipeline({
         layout: 'auto',
         vertex,
-        primitive,
         depthStencil,
         fragment: {
           module: shaderModule,
@@ -260,7 +254,7 @@ export class TextureVisualizer {
     if (pipeline && bindGroup) {
       renderPass.setBindGroup(0, bindGroup);
       renderPass.setPipeline(pipeline);
-      renderPass.draw(4);
+      renderPass.draw(3);
     }
   }
 }

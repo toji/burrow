@@ -50,11 +50,13 @@ export class DeferredRenderer {
 
   textureVisualizer: TextureVisualizer;
 
-  debugView: DebugViewType = DebugViewType.none;
+  debugView: DebugViewType = DebugViewType.all;
 
   cameraBindGroupLayout: GPUBindGroupLayout;
   cameraBindGroup: GPUBindGroup;
   cameraBuffer: GPUBuffer;
+
+  lightingPipeline: GPURenderPipeline;
 
   tempPipeline: GPURenderPipeline;
   tempMesh: Mesh;
@@ -84,10 +86,13 @@ export class DeferredRenderer {
         binding: 0,
         resource: { buffer: this.cameraBuffer }
       }]
-    })
+    });
+
+    this.tempMesh = this.createTempMesh();
 
     this.tempPipeline = this.createDeferredPipeline();
-    this.tempMesh = this.createTempMesh();
+
+    this.lightingPipeline = this.createLightingPipeline();
   }
 
   resize(width: number, height: number) {
@@ -138,22 +143,22 @@ export class DeferredRenderer {
       view: this.rgbaTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      clearValue: [0, 0, 1, 1],
+      //clearValue: [0, 0, 1, 1],
     }, {
       view: this.normalTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      clearValue: [0, 1, 0, 1],
+      //clearValue: [0, 1, 0, 1],
     }, {
       view: this.metalRoughTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      clearValue: [1, 0, 0, 1],
+      //clearValue: [1, 0, 0, 1],
     }, {
       view: this.lightTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      clearValue: [1, 1, 0, 1],
+      //clearValue: [1, 1, 0, 1],
     }];
 
     this.depthAttachment = {
@@ -166,14 +171,48 @@ export class DeferredRenderer {
 
   createTempMesh(): Mesh {
     const vertexArray = new Float32Array([
-       1.0,  1.0,  1.0, // 0
-      -1.0,  1.0,  1.0, // 1
-       1.0, -1.0,  1.0, // 2
-      -1.0, -1.0,  1.0, // 3
-       1.0,  1.0, -1.0, // 4
-      -1.0,  1.0, -1.0, // 5
-       1.0, -1.0, -1.0, // 6
-      -1.0, -1.0, -1.0, // 7
+      // float3 position, float3 color, float3 normal, float2 uv,
+      1, -1, 1,    1, 0, 1,  0, -1, 0,  1, 1,
+      -1, -1, 1,   1, 0, 1,  0, -1, 0,  0, 1,
+      -1, -1, -1,  1, 0, 1,  0, -1, 0,  0, 0,
+      1, -1, -1,   1, 0, 1,  0, -1, 0,  1, 0,
+      1, -1, 1,    1, 0, 1,  0, -1, 0,  1, 1,
+      -1, -1, -1,  1, 0, 1,  0, -1, 0,  0, 0,
+
+      1, 1, 1,     1, 0, 0,  1, 0, 0,  1, 1,
+      1, -1, 1,    1, 0, 0,  1, 0, 0,  0, 1,
+      1, -1, -1,   1, 0, 0,  1, 0, 0,  0, 0,
+      1, 1, -1,    1, 0, 0,  1, 0, 0,  1, 0,
+      1, 1, 1,     1, 0, 0,  1, 0, 0,  1, 1,
+      1, -1, -1,   1, 0, 0,  1, 0, 0,  0, 0,
+
+      -1, 1, 1,    0, 1, 0,  0, 1, 0,  1, 1,
+      1, 1, 1,     0, 1, 0,  0, 1, 0,  0, 1,
+      1, 1, -1,    0, 1, 0,  0, 1, 0,  0, 0,
+      -1, 1, -1,   0, 1, 0,  0, 1, 0,  1, 0,
+      -1, 1, 1,    0, 1, 0,  0, 1, 0,  1, 1,
+      1, 1, -1,    0, 1, 0,  0, 1, 0,  0, 0,
+
+      -1, -1, 1,   0, 1, 1,  -1, 0, 0,  1, 1,
+      -1, 1, 1,    0, 1, 1,  -1, 0, 0,  0, 1,
+      -1, 1, -1,   0, 1, 1,  -1, 0, 0,  0, 0,
+      -1, -1, -1,  0, 1, 1,  -1, 0, 0,  1, 0,
+      -1, -1, 1,   0, 1, 1,  -1, 0, 0,  1, 1,
+      -1, 1, -1,   0, 1, 1,  -1, 0, 0,  0, 0,
+
+      1, 1, 1,     0, 0, 1,  0, 0, 1,  1, 1,
+      -1, 1, 1,    0, 0, 1,  0, 0, 1,  0, 1,
+      -1, -1, 1,   0, 0, 1,  0, 0, 1,  0, 0,
+      -1, -1, 1,   0, 0, 1,  0, 0, 1,  0, 0,
+      1, -1, 1,    0, 0, 1,  0, 0, 1,  1, 0,
+      1, 1, 1,     0, 0, 1,  0, 0, 1,  1, 1,
+
+      1, -1, -1,   1, 1, 0,  0, 0, -1,  1, 1,
+      -1, -1, -1,  1, 1, 0,  0, 0, -1,  0, 1,
+      -1, 1, -1,   1, 1, 0,  0, 0, -1,  0, 0,
+      1, 1, -1,    1, 1, 0,  0, 0, -1,  1, 0,
+      1, -1, -1,   1, 1, 0,  0, 0, -1,  1, 1,
+      -1, 1, -1,   1, 1, 0,  0, 0, -1,  0, 0,
     ]);
 
     const vertexBuffer = this.device.createBuffer({
@@ -182,61 +221,36 @@ export class DeferredRenderer {
     });
     this.device.queue.writeBuffer(vertexBuffer, 0, vertexArray);
 
-    const indexArray = new Uint16Array([
-      // PosX (Right)
-      0, 2, 4,
-      6, 4, 2,
-
-      // NegX (Left)
-      5, 3, 1,
-      3, 5, 7,
- 
-      // PosY (Top)
-      4, 1, 0,
-      1, 4, 5,
-
-      // NegY (Bottom)
-      2, 3, 6,
-      7, 6, 3,
-
-      // PosZ (Front)
-      0, 1, 2,
-      3, 2, 1,
-
-      // NegZ (Back)
-      6, 5, 4,
-      5, 6, 7,
-    ]);
-
-    const indexBuffer = this.device.createBuffer({
-      size: indexArray.byteLength,
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
-    });
-    this.device.queue.writeBuffer(indexBuffer, 0, indexArray);
-
     return {
       vertex: [{
         slot: 0,
         buffer: vertexBuffer,
         offset: 0
       }],
-      index: {
-        buffer: indexBuffer,
-        offset: 0,
-        format: 'uint16'
-      },
-      drawCount: indexArray.length,
+      drawCount: 36,
     };
   }
 
   createDeferredPipeline(): GPURenderPipeline {
     // Things that will come from the model
     const buffers: GPUVertexBufferLayout[] = [{
-      arrayStride: 12,
+      arrayStride: 11 * Float32Array.BYTES_PER_ELEMENT,
       attributes: [{
-        shaderLocation: 0,
+        shaderLocation: 0, // Position
         offset: 0,
         format: 'float32x3'
+      }, {
+        shaderLocation: 1, // Color
+        offset: 3 * Float32Array.BYTES_PER_ELEMENT,
+        format: 'float32x3'
+      },  {
+        shaderLocation: 2, // Normal
+        offset: 6 * Float32Array.BYTES_PER_ELEMENT,
+        format: 'float32x3'
+      }, {
+        shaderLocation: 3, // Texcoord
+        offset: 9 * Float32Array.BYTES_PER_ELEMENT,
+        format: 'float32x2'
       }]
     }];
     const topology: GPUPrimitiveTopology = 'triangle-list';
@@ -258,12 +272,16 @@ export class DeferredRenderer {
 
         struct VertexInput {
           @location(0) position : vec4f,
+          @location(1) color : vec3f,
+          @location(2) normal : vec3f,
+          @location(3) texcoord : vec2f,
         };
 
         struct VertexOutput {
           @builtin(position) position : vec4f,
-          @location(0) normal : vec3f,
-          @location(1) texcoord : vec2f,
+          @location(1) color : vec3f,
+          @location(2) normal : vec3f,
+          @location(3) texcoord : vec2f,
         };
 
         @vertex
@@ -271,8 +289,10 @@ export class DeferredRenderer {
           var output : VertexOutput;
 
           output.position = camera.projection * camera.view * input.position;
-          output.normal = (camera.view * vec4f(0, 0, 1, 0)).xyz;
-          output.texcoord = vec2f(0);
+          output.color = input.color;
+          //output.normal = (camera.view * vec4f(input.normal, 0)).xyz;
+          output.normal = input.normal; // World space normal
+          output.texcoord = input.texcoord;
 
           return output;
         }
@@ -288,8 +308,9 @@ export class DeferredRenderer {
         fn fragmentMain(input : VertexOutput) -> FragmentOutput {
           var out: FragmentOutput;
 
-          out.albedo = vec4f(1, 0, 1, 1);
-          out.normal = vec4f(normalize(input.normal), 1);
+          out.albedo = vec4f(input.color, 1);
+          out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
+          out.metalRough = input.texcoord;
 
           return out;
         }
@@ -331,10 +352,62 @@ export class DeferredRenderer {
     return pipeline;
   }
 
+  createLightingPipeline(): GPURenderPipeline {
+    const module = this.device.createShaderModule({
+      label: 'lighting shader module',
+      code: wgsl`
+        const pos : array<vec2f, 3> = array<vec2f, 3>(
+          vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
+
+        struct VertexOutput {
+          @builtin(position) position : vec4<f32>,
+          @location(0) texcoord : vec2<f32>,
+        };
+
+        @vertex
+        fn vertexMain(@builtin(vertex_index) i: u32) -> VertexOutput {
+          let p = pos[i];
+          var output : VertexOutput;
+          output.position = vec4f(p, 0, 1);
+          output.texcoord = (vec2f(p.x, -p.y) + 1) * 0.5;
+          return output;
+        }
+
+        @fragment
+        fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+          return vec4f(input.texcoord, 0, 1);
+        }
+      `
+    });
+
+    const pipeline = this.device.createRenderPipeline({
+      label: 'lighting render pipeline',
+      layout: 'auto',
+      vertex: {
+        module,
+        entryPoint: 'vertexMain',
+      },
+      depthStencil: {
+        format: 'depth16unorm',
+        depthWriteEnabled: false,
+        depthCompare: 'less',
+      },
+      fragment: {
+        module,
+        entryPoint: 'fragmentMain',
+        targets: [{
+          format: 'rgb10a2unorm',
+        }],
+      },
+    });
+
+    return pipeline;
+  }
+
   updateCamera(camera: Camera) {
     // AUGH! BAD!
     const cameraArray = new Float32Array(64);
-    mat4.perspectiveZO(cameraArray, Math.PI * 0.5, 1, 0.1, 100);
+    mat4.perspectiveZO(cameraArray, Math.PI * 0.5, 1, 0.1, 10);
     cameraArray.set(camera.viewMatrix, 16);
     cameraArray.set(camera.position, 32);
 
@@ -347,6 +420,7 @@ export class DeferredRenderer {
     const encoder = this.device.createCommandEncoder();
 
     const gBufferPass = encoder.beginRenderPass({
+      label: 'gBuffer pass',
       colorAttachments: this.colorAttachments,
       depthStencilAttachment: this.depthAttachment
     });
@@ -371,6 +445,7 @@ export class DeferredRenderer {
     gBufferPass.end();
 
     const lightingPass = encoder.beginRenderPass({
+      label: 'lighting pass',
       colorAttachments: [{
         view: this.colorAttachments[3].view,
         loadOp: 'load',
@@ -384,9 +459,14 @@ export class DeferredRenderer {
 
     // Light stuff
 
+    lightingPass.setPipeline(this.lightingPipeline);
+    lightingPass.draw(3);
+
     lightingPass.end();
 
     const outputPass = encoder.beginRenderPass({
+      label: 'output pass',
+
       colorAttachments: [{
         view: output.createView(),
         loadOp: 'clear',
@@ -410,6 +490,7 @@ export class DeferredRenderer {
 
     if (this.debugView != DebugViewType.none) {
       const debugPass = encoder.beginRenderPass({
+        label: 'debug pass',
         colorAttachments: [{
           view: output.createView(),
           loadOp: 'load',
@@ -441,6 +522,10 @@ export class DeferredRenderer {
 
         case DebugViewType.normal:
           this.textureVisualizer.render(debugPass, this.normalTexture);
+          break;
+
+        case DebugViewType.metalRough:
+          this.textureVisualizer.render(debugPass, this.metalRoughTexture);
           break;
 
         case DebugViewType.light:
