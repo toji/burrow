@@ -1,5 +1,5 @@
 import { TextureVisualizer } from './texture-visualizer.js'
-import { gBufferShader, lightingShader } from './shaders/deferred.js';
+import { gBufferShader, lightingShader, toneMappingShader } from './shaders/deferred.js';
 import { mat4, vec3 } from '../node_modules/gl-matrix/esm/index.js';
 import { Mesh, createTempMesh } from './cube-mesh.js';
 import { LightSpriteRenderer } from './light-sprite.js';
@@ -10,8 +10,8 @@ export enum DebugViewType {
   rgba = "rgba",
   normal = "normal",
   metalRough = "metalRough",
-  light = "light",
   depth = "depth",
+  light = "light",
 };
 
 interface Camera {
@@ -51,6 +51,13 @@ export class DeferredRenderer {
   gBufferBindGroupLayout: GPUBindGroupLayout;
   gBufferBindGroup: GPUBindGroup;
 
+  toneMappingBindGroupLayout: GPUBindGroupLayout;
+  toneMappingBindGroup: GPUBindGroup;
+  toneMappingPipeline: GPURenderPipeline;
+  toneMappingBuffer: GPUBuffer;
+
+  #exposure: Float32Array = new Float32Array(4);
+
   lightingPipeline: GPURenderPipeline;
 
   lightSpriteRenderer: LightSpriteRenderer;
@@ -78,12 +85,12 @@ export class DeferredRenderer {
     lightCount[0] = LIGHT_COUNT;
 
     const lightColors = [
-      [1.0, 0.3, 0.3,  2],
+      [1.0, 0.3, 0.3,  3],
       [0.3, 1.0, 0.3,  2],
-      [0.3, 0.3, 1.0,  2],
+      [0.3, 0.3, 1.0,  1],
       [1.0, 1.0, 0.3,  2],
       [0.3, 1.0, 1.0,  2],
-      [1.0, 0.3, 1.0,  2],
+      [1.0, 0.3, 1.0,  1],
     ];
 
     for (let i = 0; i < LIGHT_COUNT; ++i) {
@@ -99,6 +106,14 @@ export class DeferredRenderer {
 
       colorIntensity.set(lightColors[i % LIGHT_COUNT]);
     }
+
+    this.toneMappingBuffer = device.createBuffer({
+      label: 'tone mapping uniform buffer',
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    this.exposure = 1.0;
 
     this.frameBindGroupLayout = device.createBindGroupLayout({
       label: 'frame bind group layout',
@@ -146,13 +161,37 @@ export class DeferredRenderer {
       }]
     });
 
+    this.toneMappingBindGroupLayout = device.createBindGroupLayout({
+      label: 'tone mapping bind group layout',
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'unfilterable-float' }
+      }, {
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: {}
+      }]
+    });
+
     this.tempMesh = createTempMesh(device);
 
     this.tempPipeline = this.createDeferredPipeline();
 
     this.lightingPipeline = this.createLightingPipeline();
 
+    this.toneMappingPipeline = this.createToneMappingPipeline();
+
     this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
+  }
+
+  get exposure(): number {
+    return this.#exposure[0];
+  }
+
+  set exposure(value: number) {
+    this.#exposure[0] = value;
+    this.device.queue.writeBuffer(this.toneMappingBuffer, 0, this.#exposure);
   }
 
   resize(width: number, height: number) {
@@ -248,6 +287,18 @@ export class DeferredRenderer {
       }, {
         binding: 3,
         resource: this.depthAttachment.view,
+      }]
+    });
+
+    this.toneMappingBindGroup = this.device.createBindGroup({
+      label: 'tone mapping bind group',
+      layout: this.toneMappingBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: this.lightAttachments[0].view,
+      }, {
+        binding: 1,
+        resource: { buffer: this.toneMappingBuffer },
       }]
     });
   }
@@ -356,6 +407,31 @@ export class DeferredRenderer {
     return pipeline;
   }
 
+  createToneMappingPipeline(): GPURenderPipeline {
+    const module = this.device.createShaderModule({
+      label: 'tone mapping shader module',
+      code: toneMappingShader
+    });
+
+    const pipeline = this.device.createRenderPipeline({
+      label: 'tone mapping pipeline',
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.toneMappingBindGroupLayout] }),
+      vertex: {
+        module,
+        entryPoint: 'vertexMain',
+      },
+      fragment: {
+        module,
+        entryPoint: 'fragmentMain',
+        targets: [{
+          format: navigator.gpu.getPreferredCanvasFormat(),
+        }],
+      },
+    });
+
+    return pipeline;
+  }
+
   updateCamera(camera: Camera) {
     // AUGH! BAD!
     const projection = mat4.create();
@@ -452,24 +528,30 @@ export class DeferredRenderer {
 
     forwardPass.end();
 
-    const outputPass = encoder.beginRenderPass({
-      label: 'output pass',
+    if (this.debugView == DebugViewType.none || this.debugView == DebugViewType.all) {
+      const outputPass = encoder.beginRenderPass({
+        label: 'output pass',
 
-      colorAttachments: [{
-        view: output.createView(),
-        loadOp: 'clear',
-        storeOp: 'store',
-        clearValue: [0.5, 0, 1, 1],
-      }],
-    });
+        colorAttachments: [{
+          view: output.createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: [0, 0, 0.3, 1],
+        }],
+      });
 
-    // Tone map
-    // Blur
-    // Maybe post-process AA?
+      // Tone map
+      outputPass.setPipeline(this.toneMappingPipeline);
+      outputPass.setBindGroup(0, this.toneMappingBindGroup);
+      outputPass.draw(3);
 
-    // Profit???
+      // Blur
+      // Maybe post-process AA?
 
-    outputPass.end();
+      // Profit???
+
+      outputPass.end();
+    }
 
     if (this.debugView != DebugViewType.none) {
       const debugPass = encoder.beginRenderPass({
@@ -493,10 +575,10 @@ export class DeferredRenderer {
           this.textureVisualizer.render(debugPass, this.metalRoughTexture);
 
           debugPass.setViewport(768, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.lightTexture);
+          this.textureVisualizer.render(debugPass, this.depthTexture);
 
           debugPass.setViewport(1024, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.depthTexture);
+          this.textureVisualizer.render(debugPass, this.lightTexture);
           break;
 
         case DebugViewType.rgba:
@@ -511,12 +593,12 @@ export class DeferredRenderer {
           this.textureVisualizer.render(debugPass, this.metalRoughTexture);
           break;
 
-        case DebugViewType.light:
-          this.textureVisualizer.render(debugPass, this.lightTexture);
-          break;
-
         case DebugViewType.depth:
           this.textureVisualizer.render(debugPass, this.depthTexture);
+          break;
+
+        case DebugViewType.light:
+          this.textureVisualizer.render(debugPass, this.lightTexture);
           break;
       }
 

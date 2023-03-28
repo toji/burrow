@@ -76,6 +76,12 @@
         renderer.debugView = ev.value;
       });
 
+      debugPane.addInput(renderer, 'exposure', {
+        step: 0.1,
+        min: 0.1,
+        max: 2.5,
+      });
+
       const stats = {
         fps: 0,
         frameMs: 0

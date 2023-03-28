@@ -67,7 +67,7 @@ export const gBufferShader = /* wgsl */`
   fn fragmentMain(input : VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    out.albedo = vec4f(input.color, 1);
+    out.albedo = vec4f(input.color + 0.1, 1);
     out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
     out.metalRough = input.texcoord;
 
@@ -105,7 +105,7 @@ export const lightingShader = /* wgsl */`
   }
 
   const lightDir = vec3f(0.25, 0.5, 1.0);
-  const dirColor = vec3f(1);
+  const dirColor = vec3f(0.1);
 
   @fragment
   fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
@@ -123,19 +123,19 @@ export const lightingShader = /* wgsl */`
     var Lo = vec3f(0);
 
     // Simple directional light
-    /*{
+    {
       let N = normalize(2 * normal.xyz - 1);
       let L = normalize(lightDir);
       let NDotL = max(dot(N, L), 0.0);
       Lo += color.rgb * NDotL * dirColor;
-    }*/
+    }
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {
       let light = &lights.pointLights[i];
       let range = (*light).range;
       let lightColor = (*light).color;
-      let lightIntensity = (*light).color;
+      let lightIntensity = (*light).intensity;
 
       let worldToLight = (*light).position - worldPos;
 
@@ -150,5 +150,37 @@ export const lightingShader = /* wgsl */`
     }
 
     return vec4f(Lo, 1);
+  }
+`;
+
+export const toneMappingShader = /* wgsl */`
+  const pos : array<vec2f, 3> = array<vec2f, 3>(
+    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
+
+  @vertex
+  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+    return vec4f(pos[i], 0, 1);
+  }
+
+  const invGamma = 1 / 2.2;
+
+  @group(0) @binding(0) var lightTexture: texture_2d<f32>;
+  @group(0) @binding(1) var<uniform> exposure: f32;
+
+  @fragment
+  fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
+    let pixelCoord = vec2u(pos.xy);
+    let hdrColor = textureLoad(lightTexture, pixelCoord, 0).rgb;
+
+    // Exposure mapping
+    let mapped = 1 - exp(-hdrColor * exposure);
+
+    // Reinhard tone mapping
+    //var mapped = hdrColor / (hdrColor + 1);
+
+    // Gamma correction
+    let gammaMapped = pow(mapped, vec3f(invGamma));
+
+    return vec4f(gammaMapped, 1);
   }
 `;
