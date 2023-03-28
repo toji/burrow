@@ -35,6 +35,7 @@
       import 'https://cdn.jsdelivr.net/npm/tweakpane@3.1.0/dist/tweakpane.min.js';
 
       import { DeferredRenderer, DebugViewType } from '../dist/deferred-renderer.js';
+      import { OrbitCamera } from './orbit-camera.js';
 
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
@@ -58,7 +59,7 @@
 
       const renderer = new DeferredRenderer(device);
 
-
+      const camera = new OrbitCamera(canvas);
 
       // Debug panel
       const debugPane = new Tweakpane.Pane({
@@ -96,7 +97,7 @@
 
 
 
-
+      // Event handlers
       function onResize() {
         const dpr = Math.min(devicePixelRatio, 2);
         canvas.width = canvas.offsetWidth * dpr;
@@ -106,6 +107,7 @@
       onResize();
       window.addEventListener('resize', onResize);
 
+      // Frame loop
       let frameCount = 0;
       let lastFrameTime = performance.now();
       function onFrame(timestamp) {
@@ -115,7 +117,7 @@
 
         const outputTexture = context.getCurrentTexture();
 
-        renderer.render(outputTexture);
+        renderer.render(outputTexture, camera);
 
         const frameEnd = performance.now();
         stats.frameMs = frameEnd - frameStart;
