@@ -152,35 +152,3 @@ export const lightingShader = /* wgsl */`
     return vec4f(Lo, 1);
   }
 `;
-
-export const toneMappingShader = /* wgsl */`
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
-    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-  @vertex
-  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-    return vec4f(pos[i], 0, 1);
-  }
-
-  const invGamma = 1 / 2.2;
-
-  @group(0) @binding(0) var lightTexture: texture_2d<f32>;
-  @group(0) @binding(1) var<uniform> exposure: f32;
-
-  @fragment
-  fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let pixelCoord = vec2u(pos.xy);
-    let hdrColor = textureLoad(lightTexture, pixelCoord, 0).rgb;
-
-    // Exposure mapping
-    let mapped = 1 - exp(-hdrColor * exposure);
-
-    // Reinhard tone mapping
-    //var mapped = hdrColor / (hdrColor + 1);
-
-    // Gamma correction
-    let gammaMapped = pow(mapped, vec3f(invGamma));
-
-    return vec4f(gammaMapped, 1);
-  }
-`;

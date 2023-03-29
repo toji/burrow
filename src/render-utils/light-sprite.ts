@@ -1,4 +1,4 @@
-import { cameraStruct, lightStruct } from "./shaders/deferred.js";
+import { cameraStruct, lightStruct } from "../shaders/deferred.js";
 
 const lightSpriteShader = /*wgsl*/`
   ${cameraStruct}
@@ -32,7 +32,7 @@ const lightSpriteShader = /*wgsl*/`
     output.color = (*light).color * (*light).intensity;
     let worldPos = vec3f(output.localPos, 0) * (*light).range * 0.025;
 
-    // Generate a billboarded model view matrix
+    // Generate a billboarded model view  matrix
     var bbModelViewMatrix : mat4x4<f32>;
     bbModelViewMatrix[3] = vec4((*light).position, 1.0);
     bbModelViewMatrix = camera.view * bbModelViewMatrix;

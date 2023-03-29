@@ -1,4 +1,4 @@
-import { mat4, vec3 } from '../node_modules/gl-matrix/esm/index.js'
+import { Mat4, Vec3 } from '../../gl-matrix/dist/src/index.js';
 
 export class OrbitCamera {
   orbitX = 0;
@@ -15,11 +15,11 @@ export class OrbitCamera {
   distanceStep = 0.005;
   constrainDistance = true;
 
-  #distance = vec3.create([0, 0, 5]);
-  #target = vec3.create();
-  #viewMat = mat4.create();
-  #cameraMat = mat4.create();
-  #position = vec3.create();
+  #distance = new Vec3(0, 0, 5);
+  #target = new Vec3();
+  #viewMat = new Mat4();
+  #cameraMat = new Mat4();
+  #position = new Vec3();
   #dirty = true;
 
   #element;
@@ -39,7 +39,7 @@ export class OrbitCamera {
     const moveCallback = (event) => {
       let xDelta, yDelta;
 
-      if(document.pointerLockEnabled) {
+      if(document.pointerLockElement) {
           xDelta = event.movementX;
           yDelta = event.movementY;
           this.orbit(xDelta * 0.025, yDelta * 0.025);
@@ -145,14 +145,14 @@ export class OrbitCamera {
 
   #updateMatrices() {
     if (this.#dirty) {
-      var mv = this.#cameraMat;
-      mat4.identity(mv);
+      let mv = this.#cameraMat;
+      mv.identity();
 
-      mat4.translate(mv, mv, this.#target);
-      mat4.rotateY(mv, mv, -this.orbitY);
-      mat4.rotateX(mv, mv, -this.orbitX);
-      mat4.translate(mv, mv, this.#distance);
-      mat4.invert(this.#viewMat, this.#cameraMat);
+      mv.translate(this.#target);
+      mv.rotateY(-this.orbitY);
+      mv.rotateX(-this.orbitX);
+      mv.translate(this.#distance);
+      Mat4.invert(this.#viewMat, this.#cameraMat);
 
       this.#dirty = false;
     }
@@ -160,8 +160,8 @@ export class OrbitCamera {
 
   get position() {
     this.#updateMatrices();
-    vec3.set(this.#position, 0, 0, 0);
-    vec3.transformMat4(this.#position, this.#position, this.#cameraMat);
+    Vec3.set(this.#position, 0, 0, 0);
+    Vec3.transformMat4(this.#position, this.#position, this.#cameraMat);
     return this.#position;
   }
 

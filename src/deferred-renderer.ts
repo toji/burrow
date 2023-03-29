@@ -1,8 +1,9 @@
-import { TextureVisualizer } from './texture-visualizer.js'
-import { gBufferShader, lightingShader, toneMappingShader } from './shaders/deferred.js';
-import { mat4, vec3 } from '../node_modules/gl-matrix/esm/index.js';
-import { Mesh, createTempMesh } from './cube-mesh.js';
-import { LightSpriteRenderer } from './light-sprite.js';
+import { TextureVisualizer } from './render-utils/texture-visualizer.js'
+import { gBufferShader, lightingShader } from './shaders/deferred.js';
+import { toneMappingShader } from './shaders/tonemap.js';
+import { Mat4, Vec3 } from '../../gl-matrix/dist/src/index.js';
+import { Mesh, createTempMesh } from './render-utils/cube-mesh.js';
+import { LightSpriteRenderer } from './render-utils/light-sprite.js';
 
 export enum DebugViewType {
   none = "none",
@@ -15,8 +16,8 @@ export enum DebugViewType {
 };
 
 interface Camera {
-  viewMatrix: mat4,
-  position: vec3,
+  viewMatrix: Mat4,
+  position: Vec3,
 }
 
 const MAX_LIGHTS = 64;
@@ -24,6 +25,10 @@ const LIGHT_STRUCT_SIZE = 32;
 const LIGHT_BUFFER_SIZE = (MAX_LIGHTS * LIGHT_STRUCT_SIZE) + 16;
 
 const LIGHT_COUNT = 6;
+
+// To prevent per-frame allocations.
+const invViewProjection = new Mat4();
+const cameraArray = new Float32Array(64);
 
 export class DeferredRenderer {
   attachmentSize: GPUExtent3DDictStrict = { width: 0, height: 0 }
@@ -48,6 +53,8 @@ export class DeferredRenderer {
   lightBuffer: GPUBuffer;
   lightArrayBuffer: ArrayBuffer;
 
+  projection: Mat4;
+
   gBufferBindGroupLayout: GPUBindGroupLayout;
   gBufferBindGroup: GPUBindGroup;
 
@@ -68,6 +75,7 @@ export class DeferredRenderer {
   constructor(public device: GPUDevice) {
     this.textureVisualizer = new TextureVisualizer(device);
 
+    this.projection = new Mat4();
     this.cameraBuffer = device.createBuffer({
       label: 'camera uniform buffer',
       size: 256,
@@ -200,6 +208,8 @@ export class DeferredRenderer {
       // Textures are already a compatible size!
       return;
     }
+
+    this.projection.perspectiveZO(Math.PI * 0.5, width/height, 0.1, 20);
 
     // Recreate all the attachments.
     const size = this.attachmentSize = { width, height };
@@ -433,16 +443,10 @@ export class DeferredRenderer {
   }
 
   updateCamera(camera: Camera) {
-    // AUGH! BAD!
-    const projection = mat4.create();
-    mat4.perspectiveZO(projection, Math.PI * 0.5, 1, 0.1, 20);
+    Mat4.multiply(invViewProjection, this.projection, camera.viewMatrix);
+    invViewProjection.invert();
 
-    const invViewProjection = mat4.create();
-    mat4.multiply(invViewProjection, projection, camera.viewMatrix);
-    mat4.invert(invViewProjection, invViewProjection);
-
-    const cameraArray = new Float32Array(64);
-    cameraArray.set(projection, 0);
+    cameraArray.set(this.projection, 0);
     cameraArray.set(camera.viewMatrix, 16);
     cameraArray.set(invViewProjection, 32);
     cameraArray.set(camera.position, 48);
@@ -451,7 +455,6 @@ export class DeferredRenderer {
   }
 
   updateLights(t: number) {
-    // Need to update any part of the lights?
     for (let i = 0; i < LIGHT_COUNT; ++i) {
       const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
       const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
@@ -565,6 +568,7 @@ export class DeferredRenderer {
 
       switch(this.debugView) {
         case DebugViewType.all:
+          // TODO: Prevent viewport errors if window is too small.
           debugPass.setViewport(0, 0, 256, 256, 0, 1);
           this.textureVisualizer.render(debugPass, this.rgbaTexture);
 
