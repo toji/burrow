@@ -1,4 +1,4 @@
-import { Mat4, Vec3 } from '../../gl-matrix/dist/src/index.js';
+import { Mat4, Vec3, Vec3Like } from '../../gl-matrix/dist/src/index.js';
 
 export class OrbitCamera {
   orbitX = 0;
@@ -22,24 +22,26 @@ export class OrbitCamera {
   #position = new Vec3();
   #dirty = true;
 
-  #element;
-  #registerElement;
+  #element: HTMLElement;
+  #registerElement: (value: HTMLElement) => void;
 
   constructor(element = null) {
     let moving = false;
-    let lastX, lastY;
+    let lastX: number;
+    let lastY: number;
 
-    const downCallback = (event) => {
+    const downCallback = (event: PointerEvent) => {
       if (event.isPrimary) {
         moving = true;
       }
       lastX = event.pageX;
       lastY = event.pageY;
     };
-    const moveCallback = (event) => {
-      let xDelta, yDelta;
+    const moveCallback = (event: PointerEvent) => {
+      let xDelta: number;
+      let yDelta: number;
 
-      if(document.pointerLockElement) {
+      if(document.pointerLockElement === this.#element) {
           xDelta = event.movementX;
           yDelta = event.movementY;
           this.orbit(xDelta * 0.025, yDelta * 0.025);
@@ -51,22 +53,22 @@ export class OrbitCamera {
           this.orbit(xDelta * 0.025, yDelta * 0.025);
       }
     };
-    const upCallback = (event) => {
+    const upCallback = (event: PointerEvent) => {
       if (event.isPrimary) {
         moving = false;
       }
     };
-    const wheelCallback = (event) => {
-      this.distance = this.#distance[2] + (-event.wheelDeltaY * this.distanceStep);
+    const wheelCallback = (event: WheelEvent) => {
+      this.distance = this.#distance[2] + (-event.deltaY * this.distanceStep);
       event.preventDefault();
     };
 
-    this.#registerElement = (value) => {
+    this.#registerElement = (value: HTMLElement) => {
       if (this.#element && this.#element != value) {
         this.#element.removeEventListener('pointerdown', downCallback);
         this.#element.removeEventListener('pointermove', moveCallback);
         this.#element.removeEventListener('pointerup', upCallback);
-        this.#element.removeEventListener('mousewheel', wheelCallback);
+        this.#element.removeEventListener('wheel', wheelCallback);
       }
 
       this.#element = value;
@@ -74,7 +76,7 @@ export class OrbitCamera {
         this.#element.addEventListener('pointerdown', downCallback);
         this.#element.addEventListener('pointermove', moveCallback);
         this.#element.addEventListener('pointerup', upCallback);
-        this.#element.addEventListener('mousewheel', wheelCallback);
+        this.#element.addEventListener('wheel', wheelCallback);
       }
     }
 
@@ -90,7 +92,7 @@ export class OrbitCamera {
     return this.#element;
   }
 
-  orbit(xDelta, yDelta) {
+  orbit(xDelta: number, yDelta: number) {
     if(xDelta || yDelta) {
       this.orbitY += xDelta;
       if(this.constrainYOrbit) {
@@ -120,14 +122,12 @@ export class OrbitCamera {
     }
   }
 
-  get target() {
+  get target(): Vec3Like {
     return [this.#target[0], this.#target[1], this.#target[2]];
   }
 
-  set target(value) {
-    this.#target[0] = value[0];
-    this.#target[1] = value[1];
-    this.#target[2] = value[2];
+  set target(value: Vec3Like) {
+    Vec3.copy(this.#target, value);
     this.#dirty = true;
   };
 
@@ -145,14 +145,13 @@ export class OrbitCamera {
 
   #updateMatrices() {
     if (this.#dirty) {
-      let mv = this.#cameraMat;
-      mv.identity();
-
-      mv.translate(this.#target);
-      mv.rotateY(-this.orbitY);
-      mv.rotateX(-this.orbitX);
-      mv.translate(this.#distance);
-      Mat4.invert(this.#viewMat, this.#cameraMat);
+      let camMat = this.#cameraMat;
+      camMat.identity();
+      camMat.translate(this.#target);
+      camMat.rotateY(-this.orbitY).rotateX(-this.orbitX);
+      camMat.translate(this.#distance);
+      
+      Mat4.invert(this.#viewMat, camMat);
 
       this.#dirty = false;
     }
