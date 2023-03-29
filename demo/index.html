@@ -34,8 +34,9 @@
     <script type="module">
       import 'https://cdn.jsdelivr.net/npm/tweakpane@3.1.0/dist/tweakpane.min.js';
 
-      import { DeferredRenderer, DebugViewType } from '../dist/deferred-renderer.js';
+      import { DeferredRenderer, DebugViewType } from '../dist/renderer/deferred-renderer.js';
       import { OrbitCamera } from '../dist/orbit-camera.js';
+      import { CubeGeometryDesc } from './cube.js';
 
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
@@ -58,6 +59,8 @@
       });
 
       const renderer = new DeferredRenderer(device);
+
+      const cubeGeometry = renderer.createGeometry(CubeGeometryDesc);
 
       const camera = new OrbitCamera(canvas);
       camera.distance = 3;
@@ -124,7 +127,7 @@
 
         const outputTexture = context.getCurrentTexture();
 
-        renderer.render(outputTexture, camera);
+        renderer.render(outputTexture, camera, cubeGeometry);
 
         const frameEnd = performance.now();
         stats.frameMs = frameEnd - frameStart;

@@ -1,10 +1,10 @@
-import { TextureVisualizer } from './render-utils/texture-visualizer.js'
-import { gBufferShader, lightingShader } from './shaders/deferred.js';
-import { toneMappingShader } from './shaders/tonemap.js';
-import { Mat4, Vec3 } from '../../gl-matrix/dist/src/index.js';
-import { Mesh, createTempMesh } from './geometry/cube-mesh.js';
-import { LightSpriteRenderer } from './render-utils/light-sprite.js';
+import { TextureVisualizer } from '../render-utils/texture-visualizer.js'
+import { gBufferShader, lightingShader } from '../shaders/deferred.js';
+import { toneMappingShader } from '../shaders/tonemap.js';
+import { Mat4, Vec3 } from '../../../gl-matrix/dist/src/index.js';
+import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
+import { RenderGeometry } from '../geometry/geometry.js';
 
 export enum DebugViewType {
   none = "none",
@@ -71,7 +71,6 @@ export class DeferredRenderer extends RendererBase {
   lightSpriteRenderer: LightSpriteRenderer;
 
   tempPipeline: GPURenderPipeline;
-  tempMesh: Mesh;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -184,8 +183,6 @@ export class DeferredRenderer extends RendererBase {
         buffer: {}
       }]
     });
-
-    this.tempMesh = createTempMesh(device);
 
     this.tempPipeline = this.createDeferredPipeline();
 
@@ -472,7 +469,7 @@ export class DeferredRenderer extends RendererBase {
     this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
   }
 
-  render(output: GPUTexture, camera: Camera /*, content: any*/) {
+  render(output: GPUTexture, camera: Camera, geometry: RenderGeometry) {
     this.updateCamera(camera);
     this.updateLights(performance.now());
 
@@ -489,16 +486,15 @@ export class DeferredRenderer extends RendererBase {
 
     gBufferPass.setPipeline(this.tempPipeline);
 
-    const mesh = this.tempMesh;
-    for (const buffer of mesh.vertex) {
+    for (const buffer of geometry.vertexBuffers) {
       gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
     }
 
-    if (mesh.index) {
-      gBufferPass.setIndexBuffer(mesh.index.buffer, mesh.index.format);
-      gBufferPass.drawIndexed(mesh.drawCount);
+    if (geometry.indexBuffer) {
+      gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
+      gBufferPass.drawIndexed(geometry.drawCount);
     } else {
-      gBufferPass.draw(mesh.drawCount);
+      gBufferPass.draw(geometry.drawCount);
     }
 
     gBufferPass.end();
