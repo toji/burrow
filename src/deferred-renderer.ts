@@ -2,8 +2,9 @@ import { TextureVisualizer } from './render-utils/texture-visualizer.js'
 import { gBufferShader, lightingShader } from './shaders/deferred.js';
 import { toneMappingShader } from './shaders/tonemap.js';
 import { Mat4, Vec3 } from '../../gl-matrix/dist/src/index.js';
-import { Mesh, createTempMesh } from './render-utils/cube-mesh.js';
+import { Mesh, createTempMesh } from './geometry/cube-mesh.js';
 import { LightSpriteRenderer } from './render-utils/light-sprite.js';
+import { RendererBase } from './renderer-base.js';
 
 export enum DebugViewType {
   none = "none",
@@ -30,7 +31,7 @@ const LIGHT_COUNT = 6;
 const invViewProjection = new Mat4();
 const cameraArray = new Float32Array(64);
 
-export class DeferredRenderer {
+export class DeferredRenderer extends RendererBase {
   attachmentSize: GPUExtent3DDictStrict = { width: 0, height: 0 }
 
   rgbaTexture: GPUTexture;
@@ -72,7 +73,9 @@ export class DeferredRenderer {
   tempPipeline: GPURenderPipeline;
   tempMesh: Mesh;
 
-  constructor(public device: GPUDevice) {
+  constructor(device: GPUDevice) {
+    super(device);
+
     this.textureVisualizer = new TextureVisualizer(device);
 
     this.projection = new Mat4();
