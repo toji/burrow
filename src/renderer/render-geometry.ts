@@ -112,16 +112,20 @@ function NormalizeBufferLayout(bufferLayouts: GeometryBufferLayout[]): GeometryB
   return normalizedLayouts.sort((a, b) => a.attributes[0].shaderLocation - b.attributes[0].shaderLocation);
 };
 
-export class RendererGeometryManager {
+export class RenderGeometryManager {
   #geometryLayoutCache: GeometryLayoutCache = new GeometryLayoutCache();
 
-  createGeometry(device: GPUDevice, desc: GeometryDescriptor): RenderGeometry {
+  constructor(public device: GPUDevice) {}
+
+  createGeometry(desc: GeometryDescriptor): RenderGeometry {
+    const device = this.device;
+
     // Vertex buffer processing
     let maxVertices = Number.MAX_SAFE_INTEGER;
 
     const vertexBuffers: GPUBuffer[] = [];
     const attribValuesToBufferLayout = new Map<GeometryValues, GeometryBufferLayout>();
-    function createBufferLayoutForValues(values: GeometryValues, arrayStride: number): GeometryBufferLayout {
+    function createBufferLayoutForValues(values: GeometryValues, arrayStride: number, attribName: string): GeometryBufferLayout {
       let buffer: GPUBuffer;
       if (values instanceof GPUBuffer) {
         buffer = values;
@@ -139,6 +143,7 @@ export class RendererGeometryManager {
 
         // Create a corresponding Vertex Buffer
         buffer = device.createBuffer({
+          label: `${desc.label} ${attribName} Vertex Buffer`,
           size: nextMultipleOf(vertexArray.byteLength, 4),
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
@@ -164,12 +169,12 @@ export class RendererGeometryManager {
       const format = attrib?.format ?? DefaultAttributeFormat[attribName];
       const stride = attrib?.stride ?? DefaultStride[format];
 
-      let bufferLayout = createBufferLayoutForValues(attrib as GeometryValues, stride);
+      let bufferLayout = createBufferLayoutForValues(attrib as GeometryValues, stride, attribName);
       if (!bufferLayout) {
         const attribDesc = (attrib as AttributeDescriptor);
         bufferLayout = attribValuesToBufferLayout.get(attribDesc.values);
         if (!bufferLayout) {
-          bufferLayout = createBufferLayoutForValues(attribDesc.values, stride);
+          bufferLayout = createBufferLayoutForValues(attribDesc.values, stride, attribName);
         }
       }
 
@@ -236,6 +241,7 @@ export class RendererGeometryManager {
 
           // Create a corresponding Index Buffer
           buffer = device.createBuffer({
+            label: `${desc.label} Index Buffer`,
             size: nextMultipleOf(indexArray.byteLength, 4),
             usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
           });

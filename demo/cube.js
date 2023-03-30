@@ -1,4 +1,4 @@
-const vertexArray = new Float32Array([
+const values = new Float32Array([
   // float3 position, float3 color, float3 normal, float2 texcoord,
   1, -1, 1,    1, 0, 1,  0, -1, 0,  1, 1,
   -1, -1, 1,   1, 0, 1,  0, -1, 0,  0, 1,
@@ -43,9 +43,12 @@ const vertexArray = new Float32Array([
   -1, 1, -1,   1, 1, 0,  0, 0, -1,  0, 0,
 ]);
 
+const stride = 44;
+
 export const CubeGeometryDesc = {
-  position: { values: vertexArray, stride: 44 },
-  color: { values: vertexArray, stride: 44, offset: 12 },
-  normal: { values: vertexArray, stride: 44, offset: 24 },
-  texcoord: { values: vertexArray, stride: 44, offset: 36 }
+  label: 'Cube Geometry',
+  position: { values, stride },
+  color: { values, stride, offset: 12 },
+  normal: { values, stride, offset: 24 },
+  texcoord: { values, stride, offset: 36 }
 };

@@ -1,4 +1,7 @@
-//import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-preprocessor.js'
+import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-preprocessor.js'
+
+import { GeometryLayout } from '../geometry/geometry-layout.js';
+import { AttributeLocation } from '../geometry/geometry.js';
 
 export const cameraStruct = /* wgsl */`
   struct Camera {
@@ -24,59 +27,84 @@ export const lightStruct = /* wgsl */`
   };
 `;
 
-export const gBufferShader = /* wgsl */`
-  ${cameraStruct}
-  @group(0) @binding(0) var<uniform> camera : Camera;
+export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
+  const locationsUsed = layout.locationsUsed;
 
-  struct VertexInput {
-    @location(0) position : vec4f,
-    @location(1) color : vec3f,
-    @location(2) normal : vec3f,
-    @location(3) texcoord : vec2f,
-  };
+  return wgsl`
+    ${cameraStruct}
+    @group(0) @binding(0) var<uniform> camera : Camera;
 
-  struct VertexOutput {
-    @builtin(position) position : vec4f,
-    @location(1) color : vec3f,
-    @location(2) normal : vec3f,
-    @location(3) texcoord : vec2f,
-  };
+    struct VertexInput {
+      @location(${AttributeLocation.position}) position : vec4f,
+#if ${locationsUsed.has(AttributeLocation.color)}
+      @location(${AttributeLocation.color}) color : vec3f,
+#endif
+#if ${locationsUsed.has(AttributeLocation.normal)}
+      @location(${AttributeLocation.normal}) normal : vec3f,
+#endif
+#if ${locationsUsed.has(AttributeLocation.texcoord)}
+      @location(${AttributeLocation.texcoord}) texcoord : vec2f,
+#endif
+    };
 
-  @vertex
-  fn vertexMain(input : VertexInput) -> VertexOutput {
-    var output : VertexOutput;
+    struct VertexOutput {
+      @builtin(position) position : vec4f,
+      @location(1) color : vec3f,
+      @location(2) normal : vec3f,
+      @location(3) texcoord : vec2f,
+    };
 
-    output.position = camera.projection * camera.view * input.position;
-    output.color = input.color;
-    output.normal = input.normal; // World space normal
-    output.texcoord = input.texcoord;
+    @vertex
+    fn vertexMain(input : VertexInput) -> VertexOutput {
+      var output : VertexOutput;
 
-    return output;
-  }
+      output.position = camera.projection * camera.view * input.position;
 
-  struct FragmentOutput {
-    @location(0) albedo : vec4f,
-    @location(1) normal : vec4f,
-    @location(2) metalRough : vec2f,
-    @location(3) light : vec4f,
-  };
+#if ${locationsUsed.has(AttributeLocation.color)}
+      output.color = input.color;
+#else
+      output.color = vec3(1, 1, 1);
+#endif
 
-  const lightAmbient = vec3f(0.1);
+#if ${locationsUsed.has(AttributeLocation.normal)}
+      output.normal = input.normal; // World space normal
+#else
+      output.normal = vec3(0, 0, 0);
+#endif
 
-  @fragment
-  fn fragmentMain(input : VertexOutput) -> FragmentOutput {
-    var out: FragmentOutput;
+#if ${locationsUsed.has(AttributeLocation.normal)}
+      output.texcoord = input.texcoord;
+#else
+      output.texcoord = vec2f(0, 0);
+#endif
 
-    out.albedo = vec4f(input.color + 0.1, 1);
-    out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
-    out.metalRough = input.texcoord;
+      return output;
+    }
 
-    // Add emissive here too eventually
-    out.light = vec4f(input.color * lightAmbient, 1);
+    struct FragmentOutput {
+      @location(0) albedo : vec4f,
+      @location(1) normal : vec4f,
+      @location(2) metalRough : vec2f,
+      @location(3) light : vec4f,
+    };
 
-    return out;
-  }
-`;
+    const lightAmbient = vec3f(0.1);
+
+    @fragment
+    fn fragmentMain(input : VertexOutput) -> FragmentOutput {
+      var out: FragmentOutput;
+
+      out.albedo = vec4f(input.color + 0.1, 1);
+      out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
+      out.metalRough = input.texcoord;
+
+      // Add emissive here too eventually
+      out.light = vec4f(input.color * lightAmbient, 1);
+
+      return out;
+    }
+  `;
+}
 
 export const lightingShader = /* wgsl */`
   ${cameraStruct}

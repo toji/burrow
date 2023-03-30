@@ -1,10 +1,11 @@
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js'
-import { gBufferShader, lightingShader } from '../shaders/deferred.js';
+import { getGBufferShader, lightingShader } from '../shaders/deferred.js';
 import { toneMappingShader } from '../shaders/tonemap.js';
 import { Mat4, Vec3 } from '../../../gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
+import { GeometryLayout } from '../geometry/geometry-layout.js';
 
 export enum DebugViewType {
   none = "none",
@@ -30,6 +31,15 @@ const LIGHT_COUNT = 6;
 // To prevent per-frame allocations.
 const invViewProjection = new Mat4();
 const cameraArray = new Float32Array(64);
+
+export interface SceneMesh {
+  transform: Mat4;
+  geometry: RenderGeometry[];
+}
+
+export interface Scene {
+  meshes: SceneMesh[];
+}
 
 export class DeferredRenderer extends RendererBase {
   attachmentSize: GPUExtent3DDictStrict = { width: 0, height: 0 }
@@ -69,8 +79,6 @@ export class DeferredRenderer extends RendererBase {
   lightingPipeline: GPURenderPipeline;
 
   lightSpriteRenderer: LightSpriteRenderer;
-
-  tempPipeline: GPURenderPipeline;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -183,8 +191,6 @@ export class DeferredRenderer extends RendererBase {
         buffer: {}
       }]
     });
-
-    this.tempPipeline = this.createDeferredPipeline();
 
     this.lightingPipeline = this.createLightingPipeline();
 
@@ -313,50 +319,32 @@ export class DeferredRenderer extends RendererBase {
     });
   }
 
-  createDeferredPipeline(): GPURenderPipeline {
-    // Things that will come from the model
-    const buffers: GPUVertexBufferLayout[] = [{
-      arrayStride: 11 * Float32Array.BYTES_PER_ELEMENT,
-      attributes: [{
-        shaderLocation: 0, // Position
-        offset: 0,
-        format: 'float32x3'
-      }, {
-        shaderLocation: 1, // Color
-        offset: 3 * Float32Array.BYTES_PER_ELEMENT,
-        format: 'float32x3'
-      },  {
-        shaderLocation: 2, // Normal
-        offset: 6 * Float32Array.BYTES_PER_ELEMENT,
-        format: 'float32x3'
-      }, {
-        shaderLocation: 3, // Texcoord
-        offset: 9 * Float32Array.BYTES_PER_ELEMENT,
-        format: 'float32x2'
-      }]
-    }];
-    const topology: GPUPrimitiveTopology = 'triangle-list';
+  #deferredPipelineCache: Map<number, GPURenderPipeline> = new Map();
+  getDeferredPipeline(layout: Readonly<GeometryLayout>): GPURenderPipeline {
+    let pipeline = this.#deferredPipelineCache.get(layout.id);
+    if (pipeline) { return pipeline; }
 
     // Things that will come from the material
     // (This is for opaque surfaces only!)
     const cullMode: GPUCullMode = 'back';
 
     const module = this.device.createShaderModule({
-      label: 'deferred shader module',
-      code: gBufferShader
+      label: `deferred shader module (layout ${layout.id})`,
+      code: getGBufferShader(layout),
     });
 
-    const pipeline = this.device.createRenderPipeline({
-      label: 'deferred render pipeline',
+    pipeline = this.device.createRenderPipeline({
+      label: `deferred render pipeline (layout ${layout.id})`,
       layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout] }),
       vertex: {
         module,
         entryPoint: 'vertexMain',
-        buffers,
+        buffers: layout.buffers,
       },
       primitive: {
-        topology,
+        topology: layout.topology,
         cullMode,
+        stripIndexFormat: layout.stripIndexFormat
       },
       depthStencil: {
         format: 'depth16unorm',
@@ -378,6 +366,7 @@ export class DeferredRenderer extends RendererBase {
       },
     });
 
+    this.#deferredPipelineCache.set(layout.id, pipeline);
     return pipeline;
   }
 
@@ -469,9 +458,33 @@ export class DeferredRenderer extends RendererBase {
     this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
   }
 
-  render(output: GPUTexture, camera: Camera, geometry: RenderGeometry) {
+  render(output: GPUTexture, camera: Camera, scene: Scene) {
     this.updateCamera(camera);
     this.updateLights(performance.now());
+
+    // Compile renderable list out of scene meshes.
+    const pipelineGeometry = new Map<GPURenderPipeline, Set<RenderGeometry>>();
+    const geometryInstances = new Map<RenderGeometry, Mat4[]>()
+
+    for (const mesh of scene.meshes) {
+      const transform = mesh.transform;
+      for (const geometry of mesh.geometry) {
+        const pipeline = this.getDeferredPipeline(geometry.layout);
+        let geometrySet = pipelineGeometry.get(pipeline);
+        if (!geometrySet) {
+          geometrySet = new Set<RenderGeometry>();
+          pipelineGeometry.set(pipeline, geometrySet);
+        }
+        geometrySet.add(geometry);
+
+        let instances = geometryInstances.get(geometry);
+        if (!instances) {
+          instances = [];
+          geometryInstances.set(geometry, instances);
+        }
+        instances.push(transform);
+      }
+    }
 
     const encoder = this.device.createCommandEncoder();
 
@@ -484,17 +497,29 @@ export class DeferredRenderer extends RendererBase {
     // Draw stuff
     gBufferPass.setBindGroup(0, this.frameBindGroup);
 
-    gBufferPass.setPipeline(this.tempPipeline);
+    for (const [pipeline, geometrySet] of pipelineGeometry.entries()) {
+      gBufferPass.setPipeline(pipeline);
 
-    for (const buffer of geometry.vertexBuffers) {
-      gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
-    }
+      for (const geometry of geometrySet) {
+        // Bind the geometry
+        for (const buffer of geometry.vertexBuffers) {
+          gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
+        }
 
-    if (geometry.indexBuffer) {
-      gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
-      gBufferPass.drawIndexed(geometry.drawCount);
-    } else {
-      gBufferPass.draw(geometry.drawCount);
+        if (geometry.indexBuffer) {
+          gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
+        }
+
+        const instances = geometryInstances.get(geometry);
+        for (const instance of instances) {
+          // TODO: Bind instance data
+          if (geometry.indexBuffer) {
+            gBufferPass.drawIndexed(geometry.drawCount);
+          } else {
+            gBufferPass.draw(geometry.drawCount);
+          }
+        }
+      }
     }
 
     gBufferPass.end();
