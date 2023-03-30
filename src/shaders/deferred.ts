@@ -162,12 +162,97 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>, material: Ren
   `;
 }
 
+// Much of the shader used here was pulled from https://learnopengl.com/PBR/Lighting
+// Thanks!
+const PbrFunctions = wgsl`
+const PI = ${Math.PI};
+
+struct SurfaceInfo {
+  albedo: vec3f,
+  normal: vec3f,
+  metalRough: vec2f,
+  f0: vec3f,
+  ao: f32,
+  v: vec3f,
+}
+
+fn FresnelSchlick(cosTheta : f32, F0 : vec3f) -> vec3f {
+  return F0 + (vec3f(1) - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+fn DistributionGGX(N : vec3f, H : vec3f, roughness : f32) -> f32 {
+  let a      = roughness*roughness;
+  let a2     = a*a;
+  let NdotH  = max(dot(N, H), 0);
+  let NdotH2 = NdotH*NdotH;
+
+  let num    = a2;
+  let denom  = (NdotH2 * (a2 - 1) + 1);
+
+  return num / (PI * denom * denom);
+}
+
+fn GeometrySchlickGGX(NdotV : f32, roughness : f32) -> f32 {
+  let r = roughness + 1;
+  let k = (r*r) / 8;
+
+  let num   = NdotV;
+  let denom = NdotV * (1 - k) + k;
+
+  return num / denom;
+}
+
+fn GeometrySmith(N : vec3f, V : vec3f, L : vec3f, roughness : f32) -> f32 {
+  let NdotV = max(dot(N, V), 0);
+  let NdotL = max(dot(N, L), 0);
+  let ggx2  = GeometrySchlickGGX(NdotV, roughness);
+  let ggx1  = GeometrySchlickGGX(NdotL, roughness);
+
+  return ggx1 * ggx2;
+}
+
+fn lightAttenuation(light : PointLight) -> f32 {
+  if (light.lightType == LightType_Directional) {
+    return 1;
+  }
+
+  let distance = length(light.pointToLight);
+  if (light.range <= 0) {
+      // Negative range means no cutoff
+      return 1 / pow(distance, 2);
+  }
+  return clamp(1 - pow(distance / light.range, 4), 0, 1) / pow(distance, 2);
+}
+
+fn lightRadiance(light : PointLight, surface: SurfaceInfo) -> vec3<f32> {
+  let L = normalize(light.pointToLight);
+  let H = normalize(surface.v + L);
+
+  // cook-torrance brdf
+  let NDF = DistributionGGX(surface.normal, H, surface.roughness);
+  let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
+  let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
+
+  let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
+  let NdotL = max(dot(surface.normal, L), 0.0);
+
+  let numerator = NDF * G * F;
+  let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
+  let specular = numerator / vec3(denominator);
+
+  // add to outgoing radiance Lo
+  let radiance = light.color * light.intensity * lightAttenuation(light);
+  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+}`;
+
 export const lightingShader = /* wgsl */`
   ${cameraStruct}
   @group(0) @binding(0) var<uniform> camera : Camera;
 
   ${lightStruct}
   @group(0) @binding(1) var<storage> lights : Lights;
+
+  ${PbrFunctions}
 
   const pos : array<vec2f, 3> = array<vec2f, 3>(
     vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
@@ -196,13 +281,25 @@ export const lightingShader = /* wgsl */`
     let targetSize = vec2f(textureDimensions(colorTexture, 0));
     let pixelCoord = vec2u(pos.xy);
 
-    let color = textureLoad(colorTexture, pixelCoord, 0);
-    let normal = textureLoad(normalTexture, pixelCoord, 0);
-    let metalRough = textureLoad(metalRoughTexture, pixelCoord, 0);
     let depth = textureLoad(depthTexture, pixelCoord, 0);
     let worldPos = worldPosFromDepth((pos.xy / targetSize), depth);
 
-    let occlusion = color.a;
+    var surface: SurfaceInfo;
+    surface.v = normalize(-worldPos);
+
+    let color = textureLoad(colorTexture, pixelCoord, 0);
+    surface.albedo = color.rgb;
+    surface.ao = color.a;
+
+    let normal = textureLoad(normalTexture, pixelCoord, 0);
+    surface.normal = normalize(2 * normal.xyz - 1);
+
+    surface.metalRough = textureLoad(metalRoughTexture, pixelCoord, 0).rg;
+
+    let dielectricSpec = vec3f(0.04);
+    surface.f0 = mix(dielectricSpec, surface.albedo, vec3f(surface.metalRough.r));
+
+    // Emmissive is handled directly in the gBuffer pass
 
     var Lo = vec3f(0);
 
@@ -217,6 +314,11 @@ export const lightingShader = /* wgsl */`
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {
       let light = &lights.pointLights[i];
+
+      // calculate per-light radiance and add to outgoing radiance Lo
+      Lo += lightRadiance(light, surface);
+
+      /*let light = &lights.pointLights[i];
       let range = (*light).range;
       let lightColor = (*light).color;
       let lightIntensity = (*light).intensity;
@@ -230,7 +332,7 @@ export const lightingShader = /* wgsl */`
       let dist = length(worldToLight);
       let atten = clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0) / pow(dist, 2.0);
 
-      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten * occlusion;
+      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten * occlusion;*/
     }
 
     return vec4f(Lo, 1);
