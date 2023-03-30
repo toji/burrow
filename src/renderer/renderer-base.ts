@@ -4,19 +4,19 @@ import { RenderGeometryManager } from './render-geometry.js';
 import { RenderMaterialManager } from './render-material.js';
 
 export class RendererBase {
-  #renderGeometryManager: RenderGeometryManager;
-  #renderMaterialManager: RenderMaterialManager;
+  renderGeometryManager: RenderGeometryManager;
+  renderMaterialManager: RenderMaterialManager;
 
   constructor(public device: GPUDevice) {
-    this.#renderGeometryManager = new RenderGeometryManager(device);
-    this.#renderMaterialManager = new RenderMaterialManager(device);
+    this.renderGeometryManager = new RenderGeometryManager(device);
+    this.renderMaterialManager = new RenderMaterialManager(device);
   }
 
   createGeometry(desc: GeometryDescriptor): RenderGeometry {
-    return this.#renderGeometryManager.createGeometry(desc);
+    return this.renderGeometryManager.createGeometry(desc);
   }
 
   createMaterial(desc: PbrMaterialDescriptor): RenderMaterial {
-    return this.#renderMaterialManager.createMaterial(desc);
+    return this.renderMaterialManager.createMaterial(desc);
   }
 }

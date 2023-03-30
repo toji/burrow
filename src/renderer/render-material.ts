@@ -8,8 +8,26 @@ const baseColorFactor = new Vec4(materialArray.buffer, 0);
 const emissiveFactor = new Vec3(materialArray.buffer, 4 * 4);
 const metallicRoughnessFactor = new Vec2(materialArray.buffer, 8 * 4);
 
+// TODO: USe the version from Hoard
+function createSolidColorTexture(device: GPUDevice, r: number, g: number, b: number, a: number = 1) {
+  const data = new Uint8Array([r * 255, g * 255, b * 255, a * 255]);
+  const texture = device.createTexture({
+    size: { width: 1, height: 1 },
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+  });
+  device.queue.writeTexture({ texture }, data, {}, { width: 1, height: 1 });
+  return texture;
+}
+
 export class RenderMaterialManager {
   materialBindGroupLayout: GPUBindGroupLayout;
+
+  defaultSampler: GPUSampler;
+
+  opaqueWhite: GPUTextureView;
+  transparentBlack: GPUTextureView;
+  defaultNormal: GPUTextureView;
 
   constructor(public device: GPUDevice) {
     this.materialBindGroupLayout = device.createBindGroupLayout({
@@ -29,21 +47,35 @@ export class RenderMaterialManager {
       }, {
         binding: 3,
         visibility: GPUShaderStage.FRAGMENT,
-        sampler: {} // Normal
+        texture: {} // Normal
       }, {
         binding: 4,
         visibility: GPUShaderStage.FRAGMENT,
-        sampler: {} // Metallic Roughness
+        texture: {} // Metallic Roughness
       }, {
         binding: 5,
         visibility: GPUShaderStage.FRAGMENT,
-        sampler: {} // Emissive
+        texture: {} // Emissive
       }, {
         binding: 6,
         visibility: GPUShaderStage.FRAGMENT,
-        sampler: {} // Occlusion
+        texture: {} // Occlusion
       }]
     });
+
+    this.defaultSampler = device.createSampler({
+      label: 'Default PBR Material Sampler',
+      minFilter: 'linear',
+      magFilter: 'linear',
+      mipmapFilter: 'linear',
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+      addressModeW: 'repeat',
+    });
+
+    this.opaqueWhite = createSolidColorTexture(device, 1, 1, 1).createView();
+    this.transparentBlack = createSolidColorTexture(device, 0, 0, 0, 0).createView();
+    this.defaultNormal = createSolidColorTexture(device, 0.5, 0.5, 1.0, 1).createView();
   }
 
   createMaterial(desc: PbrMaterialDescriptor): RenderMaterial {
@@ -51,8 +83,8 @@ export class RenderMaterialManager {
     Vec3.copy(emissiveFactor, desc.emissiveFactor ?? [0, 0, 0]);
     metallicRoughnessFactor.x = desc.metallicFactor ?? 0;
     metallicRoughnessFactor.y = desc.roughnessFactor ?? 0;
-    materialArray[7] = desc.occlusionStrength ?? 1;
-    materialArray[8] = desc.alphaCutoff ?? 0;
+    materialArray[10] = desc.occlusionStrength ?? 1;
+    materialArray[11] = desc.alphaCutoff ?? 0;
 
     const materialBuffer = this.device.createBuffer({
       label: `${desc.label} Material Uniform Buffer`,
@@ -69,22 +101,22 @@ export class RenderMaterialManager {
         resource: { buffer: materialBuffer }
       }, {
         binding: 1,
-        resource: desc.sampler,
+        resource: desc.sampler ?? this.defaultSampler,
       }, {
         binding: 2,
-        resource: desc.baseColorTexture.createView(),
+        resource: desc.baseColorTexture?.createView() ?? this.opaqueWhite,
       }, {
         binding: 3,
-        resource: desc.normalTexture.createView(),
+        resource: desc.normalTexture?.createView() ?? this.defaultNormal,
       }, {
         binding: 4,
-        resource: desc.metallicRoughnessTexture.createView(),
+        resource: desc.metallicRoughnessTexture?.createView() ?? this.opaqueWhite,
       }, {
         binding: 5,
-        resource: desc.emissiveTexture.createView(),
+        resource: desc.emissiveTexture?.createView() ?? this.transparentBlack,
       }, {
         binding: 6,
-        resource: desc.occlusionTexture.createView(),
+        resource: desc.occlusionTexture?.createView() ?? this.opaqueWhite,
       }]
     });
 

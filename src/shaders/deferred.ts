@@ -5,19 +5,19 @@ import { AttributeLocation } from '../geometry/geometry.js';
 
 export const cameraStruct = /* wgsl */`
   struct Camera {
-    projection : mat4x4f,
-    view : mat4x4f,
+    projection: mat4x4f,
+    view: mat4x4f,
     invViewProjection: mat4x4f,
-    position : vec3f,
-    time : f32,
+    position: vec3f,
+    time: f32,
   };
 `;
 
 export const lightStruct = /* wgsl */`
   struct PointLight {
-    position : vec3<f32>,
-    range : f32,
-    color : vec3<f32>,
+    position: vec3f,
+    range: f32,
+    color: vec3f,
     intensity: f32,
   };
 
@@ -26,6 +26,27 @@ export const lightStruct = /* wgsl */`
     pointLights: array<PointLight>,
   };
 `;
+
+export function pbrMaterialInputs(group: number) {
+  return /* wgsl */`
+    struct PbrMaterialUniforms {
+      baseColorFactor: vec4f,
+      emissiveFactor: vec3f,
+      metallicRoughnessFactor : vec2f,
+      occlusionStrength : f32,
+      alphaCutoff: f32,
+    };
+    @group(${group}) @binding(0) var<uniform> material : PbrMaterialUniforms;
+
+    @group(${group}) @binding(1) var pbrSampler : sampler;
+    @group(${group}) @binding(2) var baseColorTexture : texture_2d<f32>;
+    @group(${group}) @binding(3) var normalTexture : texture_2d<f32>;
+    @group(${group}) @binding(4) var metallicRoughnessTexture : texture_2d<f32>;
+    @group(${group}) @binding(5) var emissiveTexture : texture_2d<f32>;
+    @group(${group}) @binding(6) var occlusionTexture : texture_2d<f32>;
+  `;
+}
+
 
 export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
   const locationsUsed = layout.locationsUsed;
@@ -41,6 +62,9 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
 #endif
 #if ${locationsUsed.has(AttributeLocation.normal)}
       @location(${AttributeLocation.normal}) normal : vec3f,
+#endif
+#if ${locationsUsed.has(AttributeLocation.tangent)}
+      @location(${AttributeLocation.tangent}) tangent : vec4f,
 #endif
 #if ${locationsUsed.has(AttributeLocation.texcoord)}
       @location(${AttributeLocation.texcoord}) texcoord : vec2f,
@@ -72,7 +96,7 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
       output.normal = vec3(0, 0, 0);
 #endif
 
-#if ${locationsUsed.has(AttributeLocation.normal)}
+#if ${locationsUsed.has(AttributeLocation.texcoord)}
       output.texcoord = input.texcoord;
 #else
       output.texcoord = vec2f(0, 0);
@@ -81,6 +105,8 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
       return output;
     }
 
+    ${pbrMaterialInputs(/*@group*/ 1)}
+
     struct FragmentOutput {
       @location(0) albedo : vec4f,
       @location(1) normal : vec4f,
@@ -88,18 +114,22 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
       @location(3) light : vec4f,
     };
 
-    const lightAmbient = vec3f(0.1);
+    const lightAmbient = vec3f(0.01);
 
     @fragment
     fn fragmentMain(input : VertexOutput) -> FragmentOutput {
       var out: FragmentOutput;
 
-      out.albedo = vec4f(input.color + 0.1, 1);
+      let baseColor = material.baseColorFactor * textureSample(baseColorTexture, pbrSampler, input.texcoord);
+      let occlusion = material.occlusionStrength * textureSample(occlusionTexture, pbrSampler, input.texcoord).r;
+
+      out.albedo = vec4f(input.color, occlusion) * baseColor;
       out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
-      out.metalRough = input.texcoord;
+      out.metalRough = material.metallicRoughnessFactor * textureSample(metallicRoughnessTexture, pbrSampler, input.texcoord).rg;
 
       // Add emissive here too eventually
-      out.light = vec4f(input.color * lightAmbient, 1);
+      let emissive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
+      out.light = vec4f((input.color * lightAmbient) + emissive, 1);
 
       return out;
     }
@@ -148,6 +178,8 @@ export const lightingShader = /* wgsl */`
     let depth = textureLoad(depthTexture, pixelCoord, 0);
     let worldPos = worldPosFromDepth((pos.xy / targetSize), depth);
 
+    let occlusion = color.a;
+
     var Lo = vec3f(0);
 
     // Simple directional light
@@ -155,7 +187,7 @@ export const lightingShader = /* wgsl */`
       let N = normalize(2 * normal.xyz - 1);
       let L = normalize(lightDir);
       let NDotL = max(dot(N, L), 0.0);
-      Lo += color.rgb * NDotL * dirColor;
+      Lo += color.rgb * NDotL * dirColor * occlusion;
     }
 
     // Point lights
@@ -174,7 +206,7 @@ export const lightingShader = /* wgsl */`
       let dist = length(worldToLight);
       let atten = clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0) / pow(dist, 2.0);
 
-      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten;
+      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten * occlusion;
     }
 
     return vec4f(Lo, 1);

@@ -136,8 +136,8 @@ export class TextureVisualizer {
       format: colorFormat || navigator.gpu.getPreferredCanvasFormat(),
       blend: {
         color: {
-          srcFactor: 'src-alpha',
-          dstFactor: 'one-minus-src-alpha',
+          srcFactor: 'one',
+          dstFactor: 'zero',
         },
         alpha: {
           srcFactor: 'one',

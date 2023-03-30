@@ -6,6 +6,7 @@ import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
+import { RenderMaterial } from '../material/material.js';
 
 export enum DebugViewType {
   none = "none",
@@ -34,7 +35,8 @@ const cameraArray = new Float32Array(64);
 
 export interface SceneMesh {
   transform: Mat4;
-  geometry: RenderGeometry[];
+  geometry: RenderGeometry,
+  material?: RenderMaterial,
 }
 
 export interface Scene {
@@ -79,6 +81,8 @@ export class DeferredRenderer extends RendererBase {
   lightingPipeline: GPURenderPipeline;
 
   lightSpriteRenderer: LightSpriteRenderer;
+
+  defaultMaterial: RenderMaterial;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -197,6 +201,11 @@ export class DeferredRenderer extends RendererBase {
     this.toneMappingPipeline = this.createToneMappingPipeline();
 
     this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
+
+    this.defaultMaterial = this.createMaterial({
+      label: 'Default Material',
+      baseColorFactor: [0, 1, 0, 1],
+    });
   }
 
   get exposure(): number {
@@ -320,7 +329,7 @@ export class DeferredRenderer extends RendererBase {
   }
 
   #deferredPipelineCache: Map<number, GPURenderPipeline> = new Map();
-  getDeferredPipeline(layout: Readonly<GeometryLayout>): GPURenderPipeline {
+  getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline {
     let pipeline = this.#deferredPipelineCache.get(layout.id);
     if (pipeline) { return pipeline; }
 
@@ -335,7 +344,10 @@ export class DeferredRenderer extends RendererBase {
 
     pipeline = this.device.createRenderPipeline({
       label: `deferred render pipeline (layout ${layout.id})`,
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout] }),
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [
+        this.frameBindGroupLayout,
+        this.renderMaterialManager.materialBindGroupLayout
+      ] }),
       vertex: {
         module,
         entryPoint: 'vertexMain',
@@ -463,27 +475,33 @@ export class DeferredRenderer extends RendererBase {
     this.updateLights(performance.now());
 
     // Compile renderable list out of scene meshes.
-    const pipelineGeometry = new Map<GPURenderPipeline, Set<RenderGeometry>>();
-    const geometryInstances = new Map<RenderGeometry, Mat4[]>()
+    const pipelineMaterials = new Map<GPURenderPipeline, Map<RenderMaterial, Map<RenderGeometry, Mat4[]>>>();
 
     for (const mesh of scene.meshes) {
       const transform = mesh.transform;
-      for (const geometry of mesh.geometry) {
-        const pipeline = this.getDeferredPipeline(geometry.layout);
-        let geometrySet = pipelineGeometry.get(pipeline);
-        if (!geometrySet) {
-          geometrySet = new Set<RenderGeometry>();
-          pipelineGeometry.set(pipeline, geometrySet);
-        }
-        geometrySet.add(geometry);
+      const material = mesh.material ?? this.defaultMaterial;
+      const geometry = mesh.geometry;
 
-        let instances = geometryInstances.get(geometry);
-        if (!instances) {
-          instances = [];
-          geometryInstances.set(geometry, instances);
-        }
-        instances.push(transform);
+      const pipeline = this.getDeferredPipeline(geometry.layout, material);
+
+      let materialGeometries = pipelineMaterials.get(pipeline);
+      if (!materialGeometries) {
+        materialGeometries = new Map();
+        pipelineMaterials.set(pipeline, materialGeometries);
       }
+
+      let geometryInstances = materialGeometries.get(material);
+      if (!geometryInstances) {
+        geometryInstances = new Map();
+        materialGeometries.set(material, geometryInstances);
+      }
+
+      let instances = geometryInstances.get(geometry);
+      if (!instances) {
+        instances = [];
+        geometryInstances.set(geometry, instances);
+      }
+      instances.push(transform);
     }
 
     const encoder = this.device.createCommandEncoder();
@@ -497,26 +515,29 @@ export class DeferredRenderer extends RendererBase {
     // Draw stuff
     gBufferPass.setBindGroup(0, this.frameBindGroup);
 
-    for (const [pipeline, geometrySet] of pipelineGeometry.entries()) {
+    for (const [pipeline, materialGeometries] of pipelineMaterials.entries()) {
       gBufferPass.setPipeline(pipeline);
 
-      for (const geometry of geometrySet) {
-        // Bind the geometry
-        for (const buffer of geometry.vertexBuffers) {
-          gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
-        }
+      for (const [material, geometryInstances] of materialGeometries.entries()) {
+        gBufferPass.setBindGroup(1, material.bindGroup);
 
-        if (geometry.indexBuffer) {
-          gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
-        }
+        for (const [geometry, instances] of geometryInstances.entries()) {
+          // Bind the geometry
+          for (const buffer of geometry.vertexBuffers) {
+            gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
+          }
 
-        const instances = geometryInstances.get(geometry);
-        for (const instance of instances) {
-          // TODO: Bind instance data
           if (geometry.indexBuffer) {
-            gBufferPass.drawIndexed(geometry.drawCount);
-          } else {
-            gBufferPass.draw(geometry.drawCount);
+            gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
+          }
+
+          for (const instance of instances) {
+            // TODO: Bind instance data
+            if (geometry.indexBuffer) {
+              gBufferPass.drawIndexed(geometry.drawCount);
+            } else {
+              gBufferPass.draw(geometry.drawCount);
+            }
           }
         }
       }

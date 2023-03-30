@@ -61,10 +61,34 @@ export class GltfLoader {
 
     const renderMaterials: RenderMaterial[] = [];
 
+    function getTexture(textureInfo: any) {
+      const index = textureInfo?.index;
+      if (index == undefined) {
+        return null;
+      }
+
+      const texture = gltf.textures[index];
+      if (texture.source == undefined) {
+        return null;
+      }
+
+      const image = gltf.images[texture.source];
+      return image.extras?.gpu?.texture;
+    }
+
     for (const material of (gltf.materials as any[])) {
       renderMaterials.push(this.renderer.createMaterial({
         label: material.name,
-
+        baseColorFactor: material.pbrMetallicRoughness?.baseColorFactor,
+        baseColorTexture: getTexture(material.pbrMetallicRoughness?.baseColorTexture),
+        metallicFactor: material.pbrMetallicRoughness?.metallicFactor,
+        roughnessFactor: material.pbrMetallicRoughness?.roughnessFactor,
+        metallicRoughnessTexture: getTexture(material.pbrMetallicRoughness?.metallicRoughnessTexture),
+        normalTexture: getTexture(material.normalTexture),
+        occlusionTexture: getTexture(material.occlusionTexture),
+        occlusionStrength: material.occlusionTexture.strength,
+        emissiveFactor: material.emissiveFactor,
+        emissiveTexture: getTexture(material.emissiveTexture),
       }));
     }
 
@@ -75,10 +99,6 @@ export class GltfLoader {
     for (let i = 0; i < (gltf.meshes as any[]).length; ++i) {
       const mesh = gltf.meshes[i];
 
-      const renderMesh: SceneMesh = {
-        transform: new Mat4(),
-        geometry: [],
-      };
       for (const primitive of mesh.primitives) {
         const primitiveDescriptor: Partial<GeometryDescriptor> = {
           label: primitive.name,
@@ -111,10 +131,13 @@ export class GltfLoader {
           primitiveDescriptor.drawCount = accessor.count;
         }
 
-        renderMesh.geometry.push(this.renderer.createGeometry(primitiveDescriptor as GeometryDescriptor));
+        const renderMesh: SceneMesh = {
+          transform: new Mat4(),
+          geometry: this.renderer.createGeometry(primitiveDescriptor as GeometryDescriptor),
+          material: renderMaterials[primitive.material],
+        };
+        renderScene.meshes.push(renderMesh);
       }
-
-      renderScene.meshes.push(renderMesh);
     }
 
     return renderScene;
