@@ -10,12 +10,12 @@ import { RenderMaterial } from '../material/material.js';
 
 export enum DebugViewType {
   none = "none",
-  all = "all",
   rgba = "rgba",
   normal = "normal",
   metalRough = "metalRough",
   depth = "depth",
   light = "light",
+  all = "all",
 };
 
 interface Camera {
@@ -29,6 +29,9 @@ const LIGHT_BUFFER_SIZE = (MAX_LIGHTS * LIGHT_STRUCT_SIZE) + 16;
 
 const LIGHT_COUNT = 6;
 
+const MAX_INSTANCES = 1024;
+const INSTANCE_SIZE = 64;
+
 // To prevent per-frame allocations.
 const invViewProjection = new Mat4();
 const cameraArray = new Float32Array(64);
@@ -41,6 +44,12 @@ export interface SceneMesh {
 
 export interface Scene {
   meshes: SceneMesh[];
+}
+
+interface GeometryInstances {
+  firstInstance: number,
+  instanceCount: number,
+  transforms: Mat4[],
 }
 
 export class DeferredRenderer extends RendererBase {
@@ -67,6 +76,11 @@ export class DeferredRenderer extends RendererBase {
   lightArrayBuffer: ArrayBuffer;
 
   projection: Mat4;
+
+  instanceBindGroupLayout: GPUBindGroupLayout;
+  instanceBindGroup: GPUBindGroup;
+  instanceBuffer: GPUBuffer;
+  instanceArray: Float32Array;
 
   gBufferBindGroupLayout: GPUBindGroupLayout;
   gBufferBindGroup: GPUBindGroup;
@@ -101,6 +115,13 @@ export class DeferredRenderer extends RendererBase {
     this.lightBuffer = device.createBuffer({
       label: 'light storage buffer',
       size: LIGHT_BUFFER_SIZE,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+
+    this.instanceArray = new Float32Array(MAX_INSTANCES * INSTANCE_SIZE / Float32Array.BYTES_PER_ELEMENT);
+    this.instanceBuffer = device.createBuffer({
+      label: 'instance transform storage buffer',
+      size: MAX_INSTANCES * INSTANCE_SIZE,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
@@ -161,6 +182,24 @@ export class DeferredRenderer extends RendererBase {
       }, {
         binding: 1,
         resource: { buffer: this.lightBuffer }
+      }]
+    });
+
+    this.instanceBindGroupLayout = device.createBindGroupLayout({
+      label: 'instance bind group layout',
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: 'read-only-storage' }
+      }]
+    });
+
+    this.instanceBindGroup = device.createBindGroup({
+      label: 'instance bind group',
+      layout: this.instanceBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer: this.instanceBuffer }
       }]
     });
 
@@ -350,7 +389,8 @@ export class DeferredRenderer extends RendererBase {
       label: `deferred render pipeline (key ${pipelineKey})`,
       layout: this.device.createPipelineLayout({ bindGroupLayouts: [
         this.frameBindGroupLayout,
-        this.renderMaterialManager.materialBindGroupLayout
+        this.instanceBindGroupLayout,
+        this.renderMaterialManager.materialBindGroupLayout,
       ] }),
       vertex: {
         module,
@@ -398,6 +438,11 @@ export class DeferredRenderer extends RendererBase {
       vertex: {
         module,
         entryPoint: 'vertexMain',
+      },
+      depthStencil: {
+        depthCompare: 'always',
+        depthWriteEnabled: false,
+        format: 'depth16unorm',
       },
       fragment: {
         module,
@@ -481,7 +526,9 @@ export class DeferredRenderer extends RendererBase {
     this.updateLights(performance.now());
 
     // Compile renderable list out of scene meshes.
-    const pipelineMaterials = new Map<GPURenderPipeline, Map<RenderMaterial, Map<RenderGeometry, Mat4[]>>>();
+    const pipelineMaterials = new Map<GPURenderPipeline, Map<RenderMaterial, Map<RenderGeometry, GeometryInstances>>>();
+
+    const instanceList: GeometryInstances[] = [];
 
     for (const mesh of scene.meshes) {
       const transform = mesh.transform;
@@ -504,11 +551,28 @@ export class DeferredRenderer extends RendererBase {
 
       let instances = geometryInstances.get(geometry);
       if (!instances) {
-        instances = [];
+        instances = {
+          firstInstance: -1,
+          instanceCount: -1,
+          transforms: []
+        };
         geometryInstances.set(geometry, instances);
+        instanceList.push(instances);
       }
-      instances.push(transform);
+      instances.transforms.push(transform);
     }
+
+    // Update the instance buffer
+    let instanceOffset = 0;
+    for (const instances of instanceList) {
+      instances.firstInstance = instanceOffset;
+      instances.instanceCount = instances.transforms.length;
+      for (const transform of instances.transforms) {
+        this.instanceArray.set(transform, instanceOffset * 16);
+        instanceOffset++;
+      }
+    }
+    this.device.queue.writeBuffer(this.instanceBuffer, 0, this.instanceArray);
 
     const encoder = this.device.createCommandEncoder();
 
@@ -520,12 +584,13 @@ export class DeferredRenderer extends RendererBase {
 
     // Draw stuff
     gBufferPass.setBindGroup(0, this.frameBindGroup);
+    gBufferPass.setBindGroup(1, this.instanceBindGroup);
 
     for (const [pipeline, materialGeometries] of pipelineMaterials.entries()) {
       gBufferPass.setPipeline(pipeline);
 
       for (const [material, geometryInstances] of materialGeometries.entries()) {
-        gBufferPass.setBindGroup(1, material.bindGroup);
+        gBufferPass.setBindGroup(2, material.bindGroup);
 
         for (const [geometry, instances] of geometryInstances.entries()) {
           // Bind the geometry
@@ -534,17 +599,23 @@ export class DeferredRenderer extends RendererBase {
           }
 
           if (geometry.indexBuffer) {
-            gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat);
+            gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat, geometry.indexBuffer.offset);
           }
 
-          for (const instance of instances) {
+          if (geometry.indexBuffer) {
+            gBufferPass.drawIndexed(geometry.drawCount, instances.instanceCount, 0, 0, instances.firstInstance);
+          } else {
+            gBufferPass.draw(geometry.drawCount, instances.instanceCount, 0, instances.firstInstance);
+          }
+
+          /*for (const instance of instances) {
             // TODO: Bind instance data
             if (geometry.indexBuffer) {
               gBufferPass.drawIndexed(geometry.drawCount);
             } else {
               gBufferPass.draw(geometry.drawCount);
             }
-          }
+          }*/
         }
       }
     }
@@ -554,6 +625,10 @@ export class DeferredRenderer extends RendererBase {
     const lightingPass = encoder.beginRenderPass({
       label: 'deferred lighting pass',
       colorAttachments: this.lightAttachments,
+      depthStencilAttachment: {
+        view: this.depthAttachment.view,
+        depthReadOnly: true,
+      }
     });
 
     // Light deferred surfaces
@@ -618,24 +693,36 @@ export class DeferredRenderer extends RendererBase {
       });
 
       switch(this.debugView) {
-        case DebugViewType.all:
+        case DebugViewType.all: {
+          let offsetX = 0;
+          let offsetY = 0;
+          let previewWidth = 256;
+          const aspect = output.height / output.width;
+
+          const addPreview = (texture: GPUTexture) => {
+            if (offsetY + previewWidth * aspect > output.height) {
+              return;
+            }
+
+            debugPass.setViewport(offsetX, offsetY, previewWidth, previewWidth * aspect, 0, 1);
+            this.textureVisualizer.render(debugPass, texture);
+
+            offsetX += previewWidth;
+            if (offsetX + previewWidth >= output.width) {
+              offsetY += previewWidth * aspect;
+              offsetX = 0;
+            }
+          }
+
           // TODO: Prevent viewport errors if window is too small.
-          debugPass.setViewport(0, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.rgbaTexture);
+          addPreview(this.rgbaTexture);
+          addPreview(this.normalTexture);
+          addPreview(this.metalRoughTexture);
+          addPreview(this.depthTexture);
+          addPreview(this.lightTexture);
 
-          debugPass.setViewport(256, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.normalTexture);
-
-          debugPass.setViewport(512, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.metalRoughTexture);
-
-          debugPass.setViewport(768, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.depthTexture);
-
-          debugPass.setViewport(1024, 0, 256, 256, 0, 1);
-          this.textureVisualizer.render(debugPass, this.lightTexture);
           break;
-
+        }
         case DebugViewType.rgba:
           this.textureVisualizer.render(debugPass, this.rgbaTexture);
           break;

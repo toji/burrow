@@ -1,5 +1,6 @@
 import { Mat4 } from '../../../gl-matrix/dist/src/mat4.js';
 import { WebGpuGltfLoader } from '../../../hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
+import { ComputeAABB } from '../../../hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
 import { DeferredRenderer, Scene, SceneMesh } from '../renderer/deferred-renderer.js';
@@ -53,7 +54,7 @@ export class GltfLoader {
   #hoardLoader: WebGpuGltfLoader;
 
   constructor(public renderer: DeferredRenderer) {
-    this.#hoardLoader = new WebGpuGltfLoader(renderer.device);
+    this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB]);
   }
 
   async loadFromUrl(url: string): Promise<Scene> {
@@ -92,13 +93,11 @@ export class GltfLoader {
       }));
     }
 
-    const renderScene: Scene = {
-      meshes: []
-    }
-
+    const meshes = [];
     for (let i = 0; i < (gltf.meshes as any[]).length; ++i) {
       const mesh = gltf.meshes[i];
 
+      const primitives = [];
       for (const primitive of mesh.primitives) {
         const primitiveDescriptor: Partial<GeometryDescriptor> = {
           label: primitive.name,
@@ -135,12 +134,29 @@ export class GltfLoader {
           primitiveDescriptor.drawCount = accessor.count;
         }
 
-        const renderMesh: SceneMesh = {
-          transform: new Mat4(),
+        const renderMesh = {
           geometry: this.renderer.createGeometry(primitiveDescriptor as GeometryDescriptor),
           material: renderMaterials[primitive.material],
         };
-        renderScene.meshes.push(renderMesh);
+        primitives.push(renderMesh);
+      }
+
+      meshes.push(primitives);
+    }
+
+    const renderScene: Scene = {
+      meshes: []
+    }
+
+    for (const node of (gltf.nodes as any[])) {
+      if (node.mesh !== undefined) {
+        const meshPrimitives = meshes[node.mesh];
+        for (const primitive of meshPrimitives) {
+          renderScene.meshes.push({
+            ...primitive,
+            transform: node.extras.worldMatrix
+          });
+        }
       }
     }
 
