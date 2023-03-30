@@ -40,6 +40,22 @@
       import { CubeGeometryDesc } from './cube.js';
       import { Mat4 } from '../../gl-matrix/dist/src/index.js';
 
+      const GltfRootDir = '../../glTF-Sample-Models/2.0';
+      const GltfModels = {
+        antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
+        boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+        buggy: `${GltfRootDir}/Buggy/glTF-Binary/Buggy.glb`,
+        cesium_truck: `${GltfRootDir}/CesiumMilkTruck/glTF-Embedded/CesiumMilkTruck.gltf`,
+        corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
+        damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
+        flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
+        scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
+        simple_sparse: `${GltfRootDir}/SimpleSparseAccessor/glTF/SimpleSparseAccessor.gltf`,
+        unlit_test: `${GltfRootDir}/UnlitTest/glTF-Binary/UnlitTest.glb`,
+      };
+
+      let modelPath = GltfModels.scifi_helmet;
+
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
 
@@ -72,9 +88,13 @@
         }],
       };
 
-      gltfLoader.loadFromUrl('../../glTF-Sample-Models/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf').then((gltfScene) => {
-        scene = gltfScene;
-      });
+      function loadModel(path) {
+        modelPath = path;
+        gltfLoader.loadFromUrl(path).then((gltfScene) => {
+          scene = gltfScene;
+        });
+      }
+      loadModel(modelPath);
 
       const camera = new OrbitCamera(canvas);
       camera.distance = 3;
@@ -82,6 +102,15 @@
       // Debug panel
       const debugPane = new Tweakpane.Pane({
         title: 'Debug',
+      });
+
+      debugPane.addBlade({
+        label: 'model',
+        view: 'list',
+        options: GltfModels,
+        value: modelPath,
+      }).on('change', (ev) => {
+        loadModel(ev.value);
       });
 
       debugPane.addBlade({

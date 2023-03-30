@@ -2,6 +2,7 @@ import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-pr
 
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { AttributeLocation } from '../geometry/geometry.js';
+import { RenderMaterial } from '../material/material.js';
 
 export const cameraStruct = /* wgsl */`
   struct Camera {
@@ -48,7 +49,7 @@ export function pbrMaterialInputs(group: number) {
 }
 
 
-export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
+export function getGBufferShader(layout: Readonly<GeometryLayout>, material: RenderMaterial): string {
   const locationsUsed = layout.locationsUsed;
 
   return wgsl`
@@ -75,14 +76,23 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
       @builtin(position) position : vec4f,
       @location(1) color : vec3f,
       @location(2) normal : vec3f,
-      @location(3) texcoord : vec2f,
+      @location(3) tangent : vec3f,
+      @location(4) bitangent : vec3f,
+      @location(5) texcoord : vec2f,
     };
+
+    const IDENTITY_4x4 = mat4x4(1, 0, 0, 0,
+                                0, 1, 0, 0,
+                                0, 0, 1, 0,
+                                0, 0, 0, 1);
 
     @vertex
     fn vertexMain(input : VertexInput) -> VertexOutput {
       var output : VertexOutput;
 
-      output.position = camera.projection * camera.view * input.position;
+      let model = IDENTITY_4x4;
+
+      output.position = camera.projection * camera.view * model * input.position;
 
 #if ${locationsUsed.has(AttributeLocation.color)}
       output.color = input.color;
@@ -92,14 +102,15 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
 
 #if ${locationsUsed.has(AttributeLocation.normal)}
       output.normal = input.normal; // World space normal
-#else
-      output.normal = vec3(0, 0, 0);
+#endif
+
+#if ${locationsUsed.has(AttributeLocation.tangent)}
+      output.tangent = normalize((model * vec4(input.tangent.xyz, 0.0)).xyz);
+      output.bitangent = cross(output.normal, output.tangent) * input.tangent.w;
 #endif
 
 #if ${locationsUsed.has(AttributeLocation.texcoord)}
       output.texcoord = input.texcoord;
-#else
-      output.texcoord = vec2f(0, 0);
 #endif
 
       return output;
@@ -124,12 +135,27 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>): string {
       let occlusion = material.occlusionStrength * textureSample(occlusionTexture, pbrSampler, input.texcoord).r;
 
       out.albedo = vec4f(input.color, occlusion) * baseColor;
-      out.normal = vec4f(normalize(input.normal) * 0.5 + 0.5, 1);
       out.metalRough = material.metallicRoughnessFactor * textureSample(metallicRoughnessTexture, pbrSampler, input.texcoord).rg;
+
+#if ${locationsUsed.has(AttributeLocation.tangent)}
+      let tbn = mat3x3f(input.tangent, input.bitangent, input.normal);
+      let N = textureSample(normalTexture, pbrSampler, input.texcoord).rgb;
+      let normal = tbn * (2 * N - 1);
+#else
+      let normal = input.normal;
+#endif
+
+      out.normal = vec4(normalize(normal) * 0.5 + 0.5, 1);
 
       // Add emissive here too eventually
       let emissive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
       out.light = vec4f((input.color * lightAmbient) + emissive, 1);
+
+#if ${material.discard}
+      if (baseColor.a < material.alphaCutoff) {
+        discard;
+      }
+#endif
 
       return out;
     }
@@ -167,8 +193,6 @@ export const lightingShader = /* wgsl */`
 
   @fragment
   fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    // TODO: Generate world position from coord
-
     let targetSize = vec2f(textureDimensions(colorTexture, 0));
     let pixelCoord = vec2u(pos.xy);
 

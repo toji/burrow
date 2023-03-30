@@ -328,22 +328,24 @@ export class DeferredRenderer extends RendererBase {
     });
   }
 
-  #deferredPipelineCache: Map<number, GPURenderPipeline> = new Map();
+  #deferredPipelineCache: Map<string, GPURenderPipeline> = new Map();
   getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline {
-    let pipeline = this.#deferredPipelineCache.get(layout.id);
+    let pipelineKey = `${layout.id};${material.key}`;
+
+    let pipeline = this.#deferredPipelineCache.get(pipelineKey);
     if (pipeline) { return pipeline; }
 
     // Things that will come from the material
     // (This is for opaque surfaces only!)
-    const cullMode: GPUCullMode = 'back';
+    const cullMode: GPUCullMode = material.doubleSided ? 'none' : 'back';
 
     const module = this.device.createShaderModule({
-      label: `deferred shader module (layout ${layout.id})`,
-      code: getGBufferShader(layout),
+      label: `deferred shader module (key ${pipelineKey})`,
+      code: getGBufferShader(layout, material),
     });
 
     pipeline = this.device.createRenderPipeline({
-      label: `deferred render pipeline (layout ${layout.id})`,
+      label: `deferred render pipeline (key ${pipelineKey})`,
       layout: this.device.createPipelineLayout({ bindGroupLayouts: [
         this.frameBindGroupLayout,
         this.renderMaterialManager.materialBindGroupLayout
@@ -378,7 +380,7 @@ export class DeferredRenderer extends RendererBase {
       },
     });
 
-    this.#deferredPipelineCache.set(layout.id, pipeline);
+    this.#deferredPipelineCache.set(pipelineKey, pipeline);
     return pipeline;
   }
 

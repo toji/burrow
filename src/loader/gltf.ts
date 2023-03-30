@@ -86,7 +86,7 @@ export class GltfLoader {
         metallicRoughnessTexture: getTexture(material.pbrMetallicRoughness?.metallicRoughnessTexture),
         normalTexture: getTexture(material.normalTexture),
         occlusionTexture: getTexture(material.occlusionTexture),
-        occlusionStrength: material.occlusionTexture.strength,
+        occlusionStrength: material.occlusionTexture?.strength,
         emissiveFactor: material.emissiveFactor,
         emissiveTexture: getTexture(material.emissiveTexture),
       }));
@@ -107,6 +107,10 @@ export class GltfLoader {
 
         for (const [attribName, accessorIndex] of Object.entries(primitive.attributes)) {
           const primitiveAttrib = ATTRIB_MAPPING[attribName];
+          if (!primitiveAttrib) {
+            console.log(`Skipping unknown attribute ${attribName}`);
+            continue;
+          }
           const accessor = gltf.accessors[accessorIndex as number];
           const bufferView = gltf.bufferViews[accessor.bufferView];
 
