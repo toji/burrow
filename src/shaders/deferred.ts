@@ -168,6 +168,7 @@ const PbrFunctions = wgsl`
 const PI = ${Math.PI};
 
 struct SurfaceInfo {
+  worldPos: vec3f,
   albedo: vec3f,
   normal: vec3f,
   metalRough: vec2f,
@@ -211,37 +212,30 @@ fn GeometrySmith(N : vec3f, V : vec3f, L : vec3f, roughness : f32) -> f32 {
   return ggx1 * ggx2;
 }
 
-fn lightAttenuation(light : PointLight) -> f32 {
-  if (light.lightType == LightType_Directional) {
-    return 1;
-  }
-
-  let distance = length(light.pointToLight);
-  if (light.range <= 0) {
-      // Negative range means no cutoff
-      return 1 / pow(distance, 2);
-  }
-  return clamp(1 - pow(distance / light.range, 4), 0, 1) / pow(distance, 2);
-}
-
 fn lightRadiance(light : PointLight, surface: SurfaceInfo) -> vec3<f32> {
-  let L = normalize(light.pointToLight);
+  let worldToLight = light.position - surface.worldPos;
+
+  let L = normalize(worldToLight);
   let H = normalize(surface.v + L);
 
   // cook-torrance brdf
-  let NDF = DistributionGGX(surface.normal, H, surface.roughness);
-  let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
-  let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
+  let NDF = DistributionGGX(surface.normal, H, surface.metalRough.g);
+  let G = GeometrySmith(surface.normal, surface.v, L, surface.metalRough.g);
+  let F = FresnelSchlick(max(dot(H, surface.v), 0), surface.f0);
 
-  let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
+  let kD = (vec3f(1) - F) * (1 - surface.metalRough.r);
   let NdotL = max(dot(surface.normal, L), 0.0);
 
   let numerator = NDF * G * F;
-  let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
+  let denominator = max(4 * max(dot(surface.normal, surface.v), 0) * NdotL, 0.001);
   let specular = numerator / vec3(denominator);
 
+  // Point light attenuation
+  let dist = length(worldToLight);
+  let atten = clamp(1 - pow(dist / light.range, 4), 0, 1) / pow(dist, 2);
+
   // add to outgoing radiance Lo
-  let radiance = light.color * light.intensity * lightAttenuation(light);
+  let radiance = light.color * light.intensity * atten;
   return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
 }`;
 
@@ -282,10 +276,10 @@ export const lightingShader = /* wgsl */`
     let pixelCoord = vec2u(pos.xy);
 
     let depth = textureLoad(depthTexture, pixelCoord, 0);
-    let worldPos = worldPosFromDepth((pos.xy / targetSize), depth);
 
     var surface: SurfaceInfo;
-    surface.v = normalize(-worldPos);
+    surface.worldPos = worldPosFromDepth((pos.xy / targetSize), depth);
+    surface.v = normalize(camera.position - surface.worldPos);
 
     let color = textureLoad(colorTexture, pixelCoord, 0);
     surface.albedo = color.rgb;
@@ -304,35 +298,35 @@ export const lightingShader = /* wgsl */`
     var Lo = vec3f(0);
 
     // Simple directional light
-    {
-      let N = normalize(2 * normal.xyz - 1);
-      let L = normalize(lightDir);
-      let NDotL = max(dot(N, L), 0.0);
-      Lo += color.rgb * NDotL * dirColor * occlusion;
-    }
+//    {
+//      let N = normalize(2 * normal.xyz - 1);
+//      let L = normalize(lightDir);
+//      let NDotL = max(dot(N, L), 0.0);
+//      Lo += color.rgb * NDotL * dirColor * surface.ao;
+//    }
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {
       let light = &lights.pointLights[i];
 
       // calculate per-light radiance and add to outgoing radiance Lo
-      Lo += lightRadiance(light, surface);
+      Lo += lightRadiance(*light, surface);
 
-      /*let light = &lights.pointLights[i];
-      let range = (*light).range;
-      let lightColor = (*light).color;
-      let lightIntensity = (*light).intensity;
-
-      let worldToLight = (*light).position - worldPos;
-
-      let N = normalize(2 * normal.xyz - 1);
-      let L = normalize(worldToLight);
-      let NDotL = max(dot(N, L), 0.0);
-
-      let dist = length(worldToLight);
-      let atten = clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0) / pow(dist, 2.0);
-
-      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten * occlusion;*/
+//      let light = &lights.pointLights[i];
+//      let range = (*light).range;
+//      let lightColor = (*light).color;
+//      let lightIntensity = (*light).intensity;
+//
+//      let worldToLight = (*light).position - worldPos;
+//
+//      let N = normalize(2 * normal.xyz - 1);
+//      let L = normalize(worldToLight);
+//      let NDotL = max(dot(N, L), 0.0);
+//
+//      let dist = length(worldToLight);
+//      let atten = clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0) / pow(dist, 2.0);
+//
+//      Lo += color.rgb * NDotL * lightColor * lightIntensity * atten * occlusion;
     }
 
     return vec4f(Lo, 1);

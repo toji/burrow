@@ -83,6 +83,7 @@ export class DeferredRenderer extends RendererBase {
   lightSpriteRenderer: LightSpriteRenderer;
 
   defaultMaterial: RenderMaterial;
+  animateLights: boolean = true;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -107,7 +108,8 @@ export class DeferredRenderer extends RendererBase {
     lightCount[0] = LIGHT_COUNT;
 
     const lightColors = [
-      [1.0, 0.3, 0.3,  3],
+      [1.0, 1.0, 1.0,  3],
+      [1.0, 0.3, 0.3,  1],
       [0.3, 1.0, 0.3,  2],
       [0.3, 0.3, 1.0,  1],
       [1.0, 1.0, 0.3,  2],
@@ -458,18 +460,20 @@ export class DeferredRenderer extends RendererBase {
   }
 
   updateLights(t: number) {
-    for (let i = 0; i < LIGHT_COUNT; ++i) {
-      const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
-      const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
-      //const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
+    if (this.animateLights) {
+      for (let i = 0; i < LIGHT_COUNT; ++i) {
+        const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
+        const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
+        //const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
 
-      const r = (i / LIGHT_COUNT) * Math.PI * 2 + (t/1000);
-      posRange[0] = Math.sin(r) * 2.5;
-      posRange[1] = Math.sin(t / 1000 + (i / LIGHT_COUNT)) * 1.5;
-      posRange[2] = Math.cos(r) * 2.5;
+        const r = (i / LIGHT_COUNT) * Math.PI * 2 + (t/1000);
+        posRange[0] = Math.sin(r) * 2.5;
+        posRange[1] = Math.sin(t / 1000 + (i / LIGHT_COUNT)) * 1.5;
+        posRange[2] = Math.cos(r) * 2.5;
+      }
+
+      this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
     }
-
-    this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
   }
 
   render(output: GPUTexture, camera: Camera, scene: Scene) {
