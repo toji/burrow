@@ -237,6 +237,16 @@ fn lightRadiance(light : PointLight, surface: SurfaceInfo) -> vec3<f32> {
   return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
 }
 
+// From https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
+fn envBRDFApprox(specularColor: vec3f, roughness: f32, NdotV: f32) -> vec3f {
+	let c0 = vec4f(-1, -0.0275, -0.572, 0.022);
+	let c1 = vec4f(1, 0.0425, 1.04, -0.04);
+	let r = roughness * c0 + c1;
+	let a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+	let AB = vec2f(-1.04, 1.04) * a004 + r.zw;
+	return specularColor * AB.x + AB.y;
+}
+
 // Image based method borrowed from https://www.shadertoy.com/view/lscBW4
 @group(0) @binding(2) var environmentSampler : sampler;
 @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
@@ -265,13 +275,14 @@ fn IblLightRadiance(surface: SurfaceInfo) -> vec3<f32> {
 
   let prefilteredColor = getSpecularLightColor(R, surface.metalRough.g);
   //vec2 envBRDF = texture(iChannel3, vec2(NdotV, surface.metalRough.g)).rg;
-  let envBRDF = vec2f(0.8); // LOL
-  let specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+  //let envBRDF = vec2f(0.8); // LOL
+  //let specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+  //let specular = envBRDFApprox(prefilteredColor, surface.metalRough.g, NdotV);
+  let specular = vec3f(0);
 
   let kD = (vec3f(1) - F) * (1 - surface.metalRough.r);
 
   let irradiance = getDiffuseLightColor(surface.normal);
-
   let diffuse = surface.albedo * irradiance;
 
   return (kD * diffuse + specular) * surface.ao;

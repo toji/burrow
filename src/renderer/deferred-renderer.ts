@@ -99,6 +99,7 @@ export class DeferredRenderer extends RendererBase {
   skyboxRenderer: SkyboxRenderer;
 
   defaultMaterial: RenderMaterial;
+  pointLights: number = 6;
   animateLights: boolean = true;
 
   #environment: GPUTexture; // IBL Map
@@ -132,7 +133,7 @@ export class DeferredRenderer extends RendererBase {
     });
 
     const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
-    lightCount[0] = LIGHT_COUNT;
+    lightCount[0] = this.pointLights;
 
     const lightColors = [
       [1.0, 1.0, 1.0,  3],
@@ -144,18 +145,18 @@ export class DeferredRenderer extends RendererBase {
       [1.0, 0.3, 1.0,  1],
     ];
 
-    for (let i = 0; i < LIGHT_COUNT; ++i) {
+    for (let i = 0; i < this.pointLights; ++i) {
       const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
       const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
       const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
 
-      const r = (i / LIGHT_COUNT) * Math.PI * 2;
+      const r = (i / this.pointLights) * Math.PI * 2;
       posRange[0] = Math.sin(r) * 2.5;
       posRange[1] = 0;
       posRange[2] = Math.cos(r) * 2.5;
       posRange[3] = 5;
 
-      colorIntensity.set(lightColors[i % LIGHT_COUNT]);
+      colorIntensity.set(lightColors[i % lightColors.length]);
     }
 
     this.toneMappingBuffer = device.createBuffer({
@@ -560,20 +561,23 @@ export class DeferredRenderer extends RendererBase {
   }
 
   updateLights(t: number) {
+    const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
+    lightCount[0] = this.pointLights;
+
     if (this.animateLights) {
-      for (let i = 0; i < LIGHT_COUNT; ++i) {
+      for (let i = 0; i < this.pointLights; ++i) {
         const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
         const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
         //const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
 
-        const r = (i / LIGHT_COUNT) * Math.PI * 2 + (t/1000);
+        const r = (i / this.pointLights) * Math.PI * 2 + (t/1000);
         posRange[0] = Math.sin(r) * 2.5;
-        posRange[1] = Math.sin(t / 1000 + (i / LIGHT_COUNT)) * 1.5;
+        posRange[1] = Math.sin(t / 1000 + (i / this.pointLights)) * 1.5;
         posRange[2] = Math.cos(r) * 2.5;
       }
-
-      this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
     }
+
+    this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
   }
 
   render(output: GPUTexture, camera: Camera, scene: Scene) {
@@ -712,7 +716,7 @@ export class DeferredRenderer extends RendererBase {
       this.skyboxRenderer.render(forwardPass);
     }
 
-    this.lightSpriteRenderer.render(forwardPass, LIGHT_COUNT);
+    this.lightSpriteRenderer.render(forwardPass, this.pointLights);
 
     forwardPass.end();
 
