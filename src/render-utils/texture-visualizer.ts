@@ -60,6 +60,11 @@ export class TextureVisualizer {
             return textureSample(img, imgSampler, texCoord);
         }
 
+        @fragment
+        fn fragmentMainAlpha(@location(0) texCoord : vec2f) -> @location(0) vec4f {
+            return vec4f(textureSample(img, imgSampler, texCoord).aaa, 1);
+        }
+
         @group(0) @binding(1) var depthImg : texture_depth_2d;
         @fragment
         fn depthFragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
@@ -91,6 +96,18 @@ export class TextureVisualizer {
             }
             return accumValue / f32(sampleCount);
         }
+
+        @fragment
+        fn multiFragmentMainAlpha(@location(0) texCoord : vec2f) -> @location(0) vec4f {
+          let sampleCount = i32(textureNumSamples(multiImg));
+          let sampleCoord = vec2<i32>(texCoord * vec2f(textureDimensions(multiImg)));
+
+          var accumValue : vec4f;
+          for (var i = 0i; i < sampleCount; i += 1i) {
+              accumValue += textureLoad(multiImg, sampleCoord, i);
+          }
+          return vec4(accumValue.aaa, 1) / f32(sampleCount);
+      }
 
         @group(0) @binding(1) var multiDepthImg : texture_depth_multisampled_2d;
         @fragment
@@ -169,9 +186,11 @@ export class TextureVisualizer {
     };
 
     this.pipelines.set('color', createRenderPipeline('fragmentMain'));
+    this.pipelines.set('alpha', createRenderPipeline('fragmentMainAlpha'));
     this.pipelines.set('depth', createRenderPipeline('depthFragmentMain'));
     this.pipelines.set('stencil', createRenderPipeline('stencilFragmentMain'));
     this.pipelines.set('multisampled-color', createRenderPipeline('multiFragmentMain'));
+    this.pipelines.set('multisampled-alpha', createRenderPipeline('multiFragmentMainAlpha'));
     this.pipelines.set('multisampled-depth', createRenderPipeline('multiDepthFragmentMain'));
     this.pipelines.set('multisampled-stencil', createRenderPipeline('multiStencilFragmentMain'));
 
@@ -189,7 +208,8 @@ export class TextureVisualizer {
     layer: number = 0,
     rangeMin: number = 0,
     rangeMax: number = 1,
-    aspect: GPUTextureAspect = 'all'
+    aspect: GPUTextureAspect = 'all',
+    alphaOnly: boolean = false,
   ) {
     let formatType = getTextureType(texture.format);
     if (formatType === 'depth-stencil') {
@@ -203,7 +223,10 @@ export class TextureVisualizer {
         default:
           throw new Error(`Cannot render a ${formatType} texture with an aspect of ${aspect}`);
       }
+    } else if (alphaOnly) {
+      formatType = 'alpha';
     }
+
     const type = (texture.sampleCount > 1 ? 'multisampled-' : '') + formatType;
 
     const pipeline = this.pipelines.get(type);

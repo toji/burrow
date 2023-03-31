@@ -233,8 +233,8 @@ fn lightRadiance(light : PointLight, surface: SurfaceInfo) -> vec3<f32> {
   let atten = clamp(1 - pow(dist / light.range, 4), 0, 1) / pow(dist, 2);
 
   // add to outgoing radiance Lo
-  let radiance = light.color * light.intensity * atten * surface.ao;
-  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+  let radiance = light.color * light.intensity * atten;
+  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL * surface.ao;
 }
 
 // From https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
@@ -341,9 +341,8 @@ export const lightingShader = /* wgsl */`
 
     // Emmissive is handled directly in the gBuffer pass
 
-    //var Lo = IblLightRadiance(surface); //vec3f(0);
-
-    var Lo = vec3f(0);
+    var Lo = IblLightRadiance(surface);
+    //var Lo = vec3f(0);
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {

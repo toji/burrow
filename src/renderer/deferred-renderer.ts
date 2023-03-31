@@ -12,6 +12,7 @@ import { SkyboxRenderer } from '../render-utils/skybox.js';
 export enum DebugViewType {
   none = "none",
   rgba = "rgba",
+  ao = "ao",
   normal = "normal",
   metalRough = "metalRough",
   depth = "depth",
@@ -762,13 +763,13 @@ export class DeferredRenderer extends RendererBase {
           let previewWidth = 256;
           const aspect = output.height / output.width;
 
-          const addPreview = (texture: GPUTexture) => {
+          const addPreview = (texture: GPUTexture, alphaOnly: boolean = false) => {
             if (offsetY + previewWidth * aspect > output.height) {
               return;
             }
 
             debugPass.setViewport(offsetX, offsetY, previewWidth, previewWidth * aspect, 0, 1);
-            this.textureVisualizer.render(debugPass, texture);
+            this.textureVisualizer.render(debugPass, texture, 0, 0, 0, 0, undefined, alphaOnly);
 
             offsetX += previewWidth;
             if (offsetX + previewWidth >= output.width) {
@@ -779,6 +780,7 @@ export class DeferredRenderer extends RendererBase {
 
           // TODO: Prevent viewport errors if window is too small.
           addPreview(this.rgbaTexture);
+          addPreview(this.rgbaTexture, true);
           addPreview(this.normalTexture);
           addPreview(this.metalRoughTexture);
           addPreview(this.depthTexture);
@@ -788,6 +790,10 @@ export class DeferredRenderer extends RendererBase {
         }
         case DebugViewType.rgba:
           this.textureVisualizer.render(debugPass, this.rgbaTexture);
+          break;
+
+        case DebugViewType.ao:
+          this.textureVisualizer.render(debugPass, this.rgbaTexture, 0, 0, 0, 0, undefined, true);
           break;
 
         case DebugViewType.normal:
