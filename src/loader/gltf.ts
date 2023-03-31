@@ -153,13 +153,21 @@ export class GltfLoader {
       meshes: []
     }
 
+    const sceneAabb = gltf.scenes[gltf.scene].extras.aabb;
+
+    const sceneTransform = new Mat4();
+    sceneTransform.scale([2/sceneAabb.radius, 2/sceneAabb.radius, 2/sceneAabb.radius]);
+    sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1], -sceneAabb.center[2]]);
+
     for (const node of (gltf.nodes as any[])) {
       if (node.mesh !== undefined) {
         const meshPrimitives = meshes[node.mesh];
         for (const primitive of meshPrimitives) {
+          const transform = new Mat4(sceneTransform);
+          transform.multiply(node.extras.worldMatrix);
           renderScene.meshes.push({
             ...primitive,
-            transform: node.extras.worldMatrix
+            transform
           });
         }
       }

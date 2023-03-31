@@ -49,9 +49,14 @@
         corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
         damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
         flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
+        fox: `${GltfRootDir}/Fox/glTF/Fox.gltf`,
+        lantern: `${GltfRootDir}/Lantern/glTF/Lantern.gltf`,
+        shoe: `${GltfRootDir}/MaterialsVariantsShoe/glTF/MaterialsVariantsShoe.gltf`,
+        metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
         scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
-        simple_sparse: `${GltfRootDir}/SimpleSparseAccessor/glTF/SimpleSparseAccessor.gltf`,
+        suzanne: `${GltfRootDir}/Suzanne/glTF/Suzanne.gltf`,
         unlit_test: `${GltfRootDir}/UnlitTest/glTF-Binary/UnlitTest.glb`,
+        water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
       };
 
       let modelPath = GltfModels.scifi_helmet;
@@ -95,6 +100,7 @@
       function loadModel(path) {
         modelPath = path;
         gltfLoader.loadFromUrl(path).then((gltfScene) => {
+
           scene = gltfScene;
         });
       }

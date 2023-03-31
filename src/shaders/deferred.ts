@@ -99,11 +99,11 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>, material: Ren
 #endif
 
 #if ${locationsUsed.has(AttributeLocation.normal)}
-      output.normal = input.normal; // World space normal
+      output.normal = normalize((model * vec4(input.normal, 0)).xyz); // World space normal
 #endif
 
 #if ${locationsUsed.has(AttributeLocation.tangent)}
-      output.tangent = normalize((model * vec4(input.tangent.xyz, 0.0)).xyz);
+      output.tangent = normalize((model * vec4(input.tangent.xyz, 0)).xyz);
       output.bitangent = cross(output.normal, output.tangent) * input.tangent.w;
 #endif
 
@@ -341,7 +341,9 @@ export const lightingShader = /* wgsl */`
 
     // Emmissive is handled directly in the gBuffer pass
 
-    var Lo = IblLightRadiance(surface); //vec3f(0);
+    //var Lo = IblLightRadiance(surface); //vec3f(0);
+
+    var Lo = vec3f(0);
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {

@@ -80,7 +80,7 @@ function NormalizeBufferLayout(bufferLayouts: GeometryBufferLayout[]): GeometryB
       if (adjustedOffset >= layout.arrayStride) {
         normalizedLayouts.push({
           bufferIndex: layout.bufferIndex,
-          bufferOffset: adjustedOffset,
+          bufferOffset: attrib.offset,
           arrayStride: layout.arrayStride,
           attributes: [{
             offset: 0,
@@ -168,6 +168,7 @@ export class RenderGeometryManager {
 
       const format = attrib?.format ?? DefaultAttributeFormat[attribName];
       const stride = attrib?.stride ?? DefaultStride[format];
+      const offset = attrib?.offset ?? 0;
 
       let bufferLayout = createBufferLayoutForValues(attrib as GeometryValues, stride, attribName);
       if (!bufferLayout) {
@@ -181,7 +182,7 @@ export class RenderGeometryManager {
       (bufferLayout.attributes as GPUVertexAttribute[]).push({
         shaderLocation: AttributeLocation[attribName],
         format,
-        offset: attrib?.offset ?? 0
+        offset
       });
 
       // TODO: Also look at attribValues type, maybe?
