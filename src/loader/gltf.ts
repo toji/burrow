@@ -1,5 +1,6 @@
 import { Mat4 } from '../../../gl-matrix/dist/src/mat4.js';
 import { WebGpuGltfLoader } from '../../../hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
+import { WebGpuTextureLoader } from '../../../hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
 import { ComputeAABB } from '../../../hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
@@ -55,6 +56,10 @@ export class GltfLoader {
 
   constructor(public renderer: DeferredRenderer) {
     this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB]);
+  }
+
+  get textureLoader(): WebGpuTextureLoader {
+    return this.#hoardLoader.textureLoader;
   }
 
   async loadFromUrl(url: string): Promise<Scene> {

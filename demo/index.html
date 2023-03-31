@@ -79,6 +79,10 @@
       const renderer = new DeferredRenderer(device);
       const gltfLoader = new GltfLoader(renderer);
 
+      gltfLoader.textureLoader.fromUrl('./media/environments/lightroom_14b_ibl.ktx').then((texture) => {
+        renderer.environment = texture;
+      });
+
       const cubeGeometry = renderer.createGeometry(CubeGeometryDesc);
 
       let scene = {

@@ -7,6 +7,7 @@ import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
+import { SkyboxRenderer } from '../render-utils/skybox.js';
 
 export enum DebugViewType {
   none = "none",
@@ -95,9 +96,12 @@ export class DeferredRenderer extends RendererBase {
   lightingPipeline: GPURenderPipeline;
 
   lightSpriteRenderer: LightSpriteRenderer;
+  skyboxRenderer: SkyboxRenderer;
 
   defaultMaterial: RenderMaterial;
   animateLights: boolean = true;
+
+  environment: GPUTexture; // IBL Map
 
   constructor(device: GPUDevice) {
     super(device);
@@ -242,6 +246,7 @@ export class DeferredRenderer extends RendererBase {
     this.toneMappingPipeline = this.createToneMappingPipeline();
 
     this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
+    this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
 
     this.defaultMaterial = this.createMaterial({
       label: 'Default Material',
@@ -652,6 +657,10 @@ export class DeferredRenderer extends RendererBase {
 
     // Draw forward stuff?
     forwardPass.setBindGroup(0, this.frameBindGroup);
+
+    if (this.environment) {
+      this.skyboxRenderer.render(forwardPass, this.environment);
+    }
 
     this.lightSpriteRenderer.render(forwardPass, LIGHT_COUNT);
 
