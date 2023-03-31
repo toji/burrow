@@ -101,7 +101,9 @@ export class DeferredRenderer extends RendererBase {
   defaultMaterial: RenderMaterial;
   animateLights: boolean = true;
 
-  environment: GPUTexture; // IBL Map
+  #environment: GPUTexture; // IBL Map
+  defaultEnvironment: GPUTexture;
+  environmentSampler: GPUSampler;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -164,6 +166,24 @@ export class DeferredRenderer extends RendererBase {
 
     this.exposure = 1.0;
 
+    this.environmentSampler = device.createSampler({
+      label: 'environment sampler',
+      minFilter: 'linear',
+      magFilter: 'linear',
+      mipmapFilter: 'linear',
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+      addressModeW: 'repeat',
+    });
+
+    // A simple 1x1 black environment map
+    this.defaultEnvironment = device.createTexture({
+      label: 'default environment map',
+      size: [1, 1, 6],
+      usage: GPUTextureUsage.TEXTURE_BINDING,
+      format: 'rg11b10ufloat',
+    });
+
     this.frameBindGroupLayout = device.createBindGroupLayout({
       label: 'frame bind group layout',
       entries: [{
@@ -174,20 +194,18 @@ export class DeferredRenderer extends RendererBase {
         binding: 1,
         visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
         buffer: { type: 'read-only-storage' } // Light uniforms
+      }, {
+        binding: 2,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: {} // Environment sampler
+      }, {
+        binding: 3,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { viewDimension: 'cube' } // Environment map
       }]
     });
 
-    this.frameBindGroup = device.createBindGroup({
-      label: 'camera bind group',
-      layout: this.frameBindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.cameraBuffer }
-      }, {
-        binding: 1,
-        resource: { buffer: this.lightBuffer }
-      }]
-    });
+    this.updateFrameBindGroup();
 
     this.instanceBindGroupLayout = device.createBindGroupLayout({
       label: 'instance bind group layout',
@@ -252,6 +270,38 @@ export class DeferredRenderer extends RendererBase {
       label: 'Default Material',
       baseColorFactor: [0, 1, 0, 1],
     });
+  }
+
+  updateFrameBindGroup() {
+    this.frameBindGroup = this.device.createBindGroup({
+      label: 'frame bind group',
+      layout: this.frameBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer: this.cameraBuffer }
+      }, {
+        binding: 1,
+        resource: { buffer: this.lightBuffer }
+      }, {
+        binding: 2,
+        resource: this.environmentSampler,
+      }, {
+        binding: 3,
+        resource: (this.#environment || this.defaultEnvironment).createView({
+          dimension: 'cube'
+        })
+      }]
+    });
+  }
+
+  get environment(): GPUTexture {
+    return this.#environment;
+  }
+
+  set environment(environmentTexture: GPUTexture) {
+    // TODO: Validate that it's a cube map?
+    this.#environment = environmentTexture;
+    this.updateFrameBindGroup();
   }
 
   get exposure(): number {
@@ -659,7 +709,7 @@ export class DeferredRenderer extends RendererBase {
     forwardPass.setBindGroup(0, this.frameBindGroup);
 
     if (this.environment) {
-      this.skyboxRenderer.render(forwardPass, this.environment);
+      this.skyboxRenderer.render(forwardPass);
     }
 
     this.lightSpriteRenderer.render(forwardPass, LIGHT_COUNT);

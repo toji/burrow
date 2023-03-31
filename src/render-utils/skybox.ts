@@ -26,12 +26,12 @@ const SKYBOX_SHADER = /*wgsl*/`
     return output;
   }
 
-  @group(1) @binding(0) var skyboxSampler : sampler;
-  @group(1) @binding(1) var skyboxTexture : texture_cube<f32>;
+  @group(0) @binding(2) var environmentSampler : sampler;
+  @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
 
   @fragment
   fn fragmentMain(@location(0) texcoord : vec3f) -> @location(0) vec4f {
-    return textureSample(skyboxTexture, skyboxSampler, texcoord);
+    return textureSample(environmentTexture, environmentSampler, texcoord);
   }
 `;
 
@@ -74,29 +74,11 @@ const SKYBOX_INDICES = new Uint16Array([
 
 export class SkyboxRenderer {
   pipeline: GPURenderPipeline;
-  bindGroupLayout: GPUBindGroupLayout;
 
   skyboxVertexBuffer: GPUBuffer;
   skyboxIndexBuffer: GPUBuffer;
-  skyboxSampler: GPUSampler;
-
-  lastEnv: GPUTexture;
-  envBindGroup: GPUBindGroup;
 
   constructor(public device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout) {
-    this.bindGroupLayout = device.createBindGroupLayout({
-      label: 'skybox bind group layout',
-      entries: [{
-        binding: 0, // skyboxSampler
-        visibility: GPUShaderStage.FRAGMENT,
-        sampler: {}
-      }, {
-        binding: 1, // skyboxTexture
-        visibility: GPUShaderStage.FRAGMENT,
-        texture: { viewDimension: 'cube' }
-      }]
-    });
-
     const shaderModule = device.createShaderModule({
       label: 'skybox shader',
       code: SKYBOX_SHADER,
@@ -122,7 +104,6 @@ export class SkyboxRenderer {
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
           frameBindGroupLayout,
-          this.bindGroupLayout,
         ]
       }),
       vertex: {
@@ -162,37 +143,11 @@ export class SkyboxRenderer {
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(this.skyboxIndexBuffer, 0, SKYBOX_INDICES);
-
-    this.skyboxSampler = device.createSampler({
-      label: 'skybox sampler',
-      minFilter: 'linear',
-      magFilter: 'linear',
-      mipmapFilter: 'linear',
-      addressModeU: 'repeat',
-      addressModeV: 'repeat',
-      addressModeW: 'repeat',
-    });
   }
 
-  render(renderPass: GPURenderPassEncoder, environment: GPUTexture) {
-    if (this.lastEnv != environment) {
-      this.lastEnv = environment;
-      this.envBindGroup = this.device.createBindGroup({
-        label: 'skybox bind group',
-        layout: this.bindGroupLayout,
-        entries: [{
-          binding: 0,
-          resource: this.skyboxSampler,
-        }, {
-          binding: 1,
-          resource: environment.createView({
-            dimension: 'cube'
-          }),
-        }]
-      });
-    }
+  render(renderPass: GPURenderPassEncoder) {
+    // Skybox is part of the frame bind group, which should already be bound prior to calling this method.
     renderPass.setPipeline(this.pipeline);
-    renderPass.setBindGroup(1, this.envBindGroup);
     renderPass.setVertexBuffer(0, this.skyboxVertexBuffer);
     renderPass.setIndexBuffer(this.skyboxIndexBuffer, 'uint16');
     renderPass.drawIndexed(SKYBOX_INDICES.length);

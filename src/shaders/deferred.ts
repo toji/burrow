@@ -233,8 +233,48 @@ fn lightRadiance(light : PointLight, surface: SurfaceInfo) -> vec3<f32> {
   let atten = clamp(1 - pow(dist / light.range, 4), 0, 1) / pow(dist, 2);
 
   // add to outgoing radiance Lo
-  let radiance = light.color * light.intensity * atten;
+  let radiance = light.color * light.intensity * atten * surface.ao;
   return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+}
+
+// Image based method borrowed from https://www.shadertoy.com/view/lscBW4
+@group(0) @binding(2) var environmentSampler : sampler;
+@group(0) @binding(3) var environmentTexture : texture_cube<f32>;
+
+fn getSpecularLightColor(N: vec3f, roughness: f32) -> vec3f {
+  let envLevels = f32(textureNumLevels(environmentTexture));
+  return pow(textureSampleLevel(environmentTexture, environmentSampler, N, roughness * envLevels).rgb, vec3f(4.5)) * 6.5;
+}
+
+fn getDiffuseLightColor(N: vec3f) -> vec3f {
+  let diffuseLevel = f32(textureNumLevels(environmentTexture) - 1); // ??
+  return 0.25 + pow(textureSampleLevel(environmentTexture, environmentSampler, N, diffuseLevel).rgb, vec3f(3));
+}
+
+fn FresnelSchlickRoughness(cosTheta: f32, F0: vec3f, roughness: f32) -> vec3f {
+  return F0 + (max(vec3f(1 - roughness), F0) - F0) * pow(1 - cosTheta, 5);
+}
+
+fn IblLightRadiance(surface: SurfaceInfo) -> vec3<f32> {
+// in vec3 ro, in vec3 pos, in vec3 N, in vec3 albedo, in float ao, in float roughness, in float metallic
+
+  let R = reflect(-surface.v, surface.normal);
+  let NdotV = max(0.0, dot(surface.normal, surface.v));
+
+  let F = FresnelSchlickRoughness(NdotV, surface.f0, surface.metalRough.g);
+
+  let prefilteredColor = getSpecularLightColor(R, surface.metalRough.g);
+  //vec2 envBRDF = texture(iChannel3, vec2(NdotV, surface.metalRough.g)).rg;
+  let envBRDF = vec2f(0.8); // LOL
+  let specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+  let kD = (vec3f(1) - F) * (1 - surface.metalRough.r);
+
+  let irradiance = getDiffuseLightColor(surface.normal);
+
+  let diffuse = surface.albedo * irradiance;
+
+  return (kD * diffuse + specular) * surface.ao;
 }`;
 
 export const lightingShader = /* wgsl */`
@@ -290,7 +330,7 @@ export const lightingShader = /* wgsl */`
 
     // Emmissive is handled directly in the gBuffer pass
 
-    var Lo = vec3f(0);
+    var Lo = IblLightRadiance(surface); //vec3f(0);
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {
