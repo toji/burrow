@@ -285,6 +285,7 @@ fn IblLightRadiance(surface: SurfaceInfo) -> vec3<f32> {
   let irradiance = getDiffuseLightColor(surface.normal);
   let diffuse = surface.albedo * irradiance;
 
+  //return prefilteredColor;
   return (kD * diffuse + specular) * surface.ao;
 }`;
 

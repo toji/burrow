@@ -40,6 +40,8 @@
       import { CubeGeometryDesc } from './cube.js';
       import { Mat4 } from '../../gl-matrix/dist/src/index.js';
 
+      //import { WebGPUTextureLoader } from '../../web-texture-tool/src/webgpu-texture-loader.js';
+
       const GltfRootDir = '../../glTF-Sample-Models/2.0';
       const GltfModels = {
         antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
@@ -60,6 +62,13 @@
       };
 
       let modelPath = GltfModels.scifi_helmet;
+
+      const EnvMaps = {
+        lightroom: './media/environments/lightroom_14b_ibl.ktx',
+        quattro_canti: './media/environments/quattro_canti_ibl.ktx',
+        industrial_pipe_and_valve: './media/environments/industrial_pipe_and_valve_ibl.ktx',
+      };
+      let envPath = EnvMaps.quattro_canti;
 
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
@@ -83,10 +92,7 @@
 
       const renderer = new DeferredRenderer(device);
       const gltfLoader = new GltfLoader(renderer);
-
-      gltfLoader.textureLoader.fromUrl('./media/environments/lightroom_14b_ibl.ktx').then((texture) => {
-        renderer.environment = texture;
-      });
+      const textureLoader = gltfLoader.textureLoader;
 
       const cubeGeometry = renderer.createGeometry(CubeGeometryDesc);
 
@@ -106,6 +112,14 @@
       }
       loadModel(modelPath);
 
+      function loadEnv(path) {
+        envPath = path;
+        gltfLoader.textureLoader.fromUrl(path).then((texture) => {
+          renderer.environment = texture;
+        });
+      }
+      loadEnv(envPath);
+
       const camera = new OrbitCamera(canvas);
       camera.distance = 3;
 
@@ -121,6 +135,15 @@
         value: modelPath,
       }).on('change', (ev) => {
         loadModel(ev.value);
+      });
+
+      debugPane.addBlade({
+        label: 'environment',
+        view: 'list',
+        options: EnvMaps,
+        value: envPath,
+      }).on('change', (ev) => {
+        loadEnv(ev.value);
       });
 
       debugPane.addBlade({
