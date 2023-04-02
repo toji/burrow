@@ -35,6 +35,7 @@ export const surfaceInfoStruct = /* wgsl */`
     worldPos: vec3f,
     V: vec3f, // normalized vector from the shading location to the eye
     N: vec3f, // surface normal in the world space
+    specularColor: vec3f,
     diffuseColor: vec3f,
     metal: f32,
     rough: f32,
@@ -230,6 +231,7 @@ export const lightingShader = /* wgsl */`
     surface.rough = clamp(metalRough.g, MIN_ROUGHNESS, 1.0);
 
     surface.diffuseColor = color.rgb * (1 - surface.metal);
+    surface.specularColor = color.rgb * surface.metal;
 
     let dielectricSpec = vec3f(0.04);
     surface.f0 = mix(dielectricSpec, color.rgb, vec3f(surface.metal));
@@ -259,8 +261,8 @@ export const lightingShader = /* wgsl */`
 
     // Emmissive is handled directly in the gBuffer pass
 
-    //var Lo = IblLightRadiance(surface);
-    var Lo = vec3f(0);
+    var Lo = pbrSurfaceColorIbl(surface);
+    //var Lo = vec3f(0);
 
     // Point lights
     for (var i: u32 = 0; i < lights.pointLightCount; i++) {
