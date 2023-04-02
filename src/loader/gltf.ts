@@ -62,6 +62,10 @@ export class GltfLoader {
     return this.#hoardLoader.textureLoader;
   }
 
+  clearCache() {
+    this.#hoardLoader.clearCache();
+  }
+
   async loadFromUrl(url: string): Promise<Scene> {
     const gltf = await this.#hoardLoader.loadFromUrl(url);
 
@@ -153,6 +157,7 @@ export class GltfLoader {
       meshes: []
     }
 
+    // @ts-ignore
     const sceneAabb = gltf.scenes[gltf.scene].extras.aabb;
 
     const sceneTransform = new Mat4();

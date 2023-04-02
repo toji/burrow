@@ -269,7 +269,6 @@ export class RenderGeometryManager {
     }
 
     const geometryLayout = this.#geometryLayoutCache.createLayout(bufferLayouts, desc.topology ?? 'triangle-list', indexBinding?.indexFormat);
-    console.log(`Geometry Layout #${geometryLayout.id}: ${geometryLayout.serializeToString()}`);
 
     return new RenderGeometry(
       drawCount,

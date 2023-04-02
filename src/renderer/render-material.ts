@@ -81,8 +81,8 @@ export class RenderMaterialManager {
   createMaterial(desc: PbrMaterialDescriptor): RenderMaterial {
     Vec4.copy(baseColorFactor, desc.baseColorFactor ?? [1, 1, 1, 1]);
     Vec3.copy(emissiveFactor, desc.emissiveFactor ?? [0, 0, 0]);
-    metallicRoughnessFactor.x = desc.metallicFactor ?? 0;
-    metallicRoughnessFactor.y = desc.roughnessFactor ?? 0;
+    metallicRoughnessFactor.x = desc.metallicFactor ?? 1;
+    metallicRoughnessFactor.y = desc.roughnessFactor ?? 1;
     materialArray[10] = desc.occlusionStrength ?? 1;
     materialArray[11] = desc.alphaCutoff ?? 0;
 

@@ -64,9 +64,11 @@
       let modelPath = GltfModels.scifi_helmet;
 
       const EnvMaps = {
+        none: null,
         lightroom: './media/environments/lightroom_14b_ibl.ktx',
         quattro_canti: './media/environments/quattro_canti_ibl.ktx',
         industrial_pipe_and_valve: './media/environments/industrial_pipe_and_valve_ibl.ktx',
+        symmetrical_garden: './media/environments/symmetrical_garden_1k_ibl.ktx',
       };
       let envPath = EnvMaps.quattro_canti;
 
@@ -114,9 +116,13 @@
 
       function loadEnv(path) {
         envPath = path;
-        gltfLoader.textureLoader.fromUrl(path).then((texture) => {
-          renderer.environment = texture;
-        });
+        if (path) {
+          gltfLoader.textureLoader.fromUrl(path).then((texture) => {
+            renderer.environment = texture;
+          });
+        } else {
+          renderer.environment = null;
+        }
       }
       loadEnv(envPath);
 
@@ -167,6 +173,14 @@
         max: 6,
       });
       debugPane.addInput(renderer, 'animateLights');
+
+      debugPane.addButton({
+        label: 'Cache',
+        title: 'Clear',
+      }).on('click', (ev) => {
+        console.log('Clearing Cache');
+        gltfLoader.clearCache();
+      });
 
       const stats = {
         fps: 0,
