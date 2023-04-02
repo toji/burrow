@@ -1,7 +1,7 @@
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js'
 import { getGBufferShader, lightingShader } from '../shaders/deferred.js';
 import { toneMappingShader } from '../shaders/tonemap.js';
-import { Mat4, Vec3 } from '../../../gl-matrix/dist/src/index.js';
+import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';

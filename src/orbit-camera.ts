@@ -1,4 +1,4 @@
-import { Mat4, Vec3, Vec3Like } from '../../gl-matrix/dist/src/index.js';
+import { Mat4, Vec3, Vec3Like } from '../third-party/gl-matrix/dist/src/index.js';
 
 export class OrbitCamera {
   orbitX = 0;
@@ -150,7 +150,7 @@ export class OrbitCamera {
       camMat.translate(this.#target);
       camMat.rotateY(-this.orbitY).rotateX(-this.orbitX);
       camMat.translate(this.#distance);
-      
+
       Mat4.invert(this.#viewMat, camMat);
 
       this.#dirty = false;

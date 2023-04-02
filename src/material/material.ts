@@ -1,4 +1,4 @@
-import { Vec3Like, Vec4Like } from "../../../gl-matrix/dist/src/index.js";
+import { Vec3Like, Vec4Like } from "../../third-party/gl-matrix/dist/src/index.js";
 
 export interface PbrMaterialDescriptor {
   label?: string;
@@ -31,7 +31,7 @@ export class RenderMaterial {
   get key(): string {
     return
       (this.transparent ? 0x01 : 0) +
-      (this.doubleSided ? 0x02 : 0) + 
+      (this.doubleSided ? 0x02 : 0) +
       (this.discard ? 0x04 : 0);
   }
 }

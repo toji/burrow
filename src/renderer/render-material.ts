@@ -1,4 +1,4 @@
-import { Vec4, Vec3, Vec2 } from '../../../gl-matrix/dist/src/index.js';
+import { Vec4, Vec3, Vec2 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { PbrMaterialDescriptor, RenderMaterial } from '../material/material.js';
 
 // Can reuse these for every PBR material
