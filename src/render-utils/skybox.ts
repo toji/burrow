@@ -32,7 +32,7 @@ const SKYBOX_SHADER = /*wgsl*/`
   @fragment
   fn fragmentMain(@location(0) texcoord : vec3f) -> @location(0) vec4f {
     return textureSample(environmentTexture, environmentSampler, texcoord);
-    //sreturn textureSampleLevel(environmentTexture, environmentSampler, texcoord, 1);
+    //return textureSampleLevel(environmentTexture, environmentSampler, texcoord, 1);
   }
 `;
 

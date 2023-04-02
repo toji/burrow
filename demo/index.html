@@ -103,7 +103,6 @@
       function loadModel(path) {
         modelPath = path;
         gltfLoader.loadFromUrl(path).then((gltfScene) => {
-
           scene = gltfScene;
         });
       }
@@ -127,6 +126,7 @@
       // Debug panel
       const debugPane = new Tweakpane.Pane({
         title: 'Debug',
+        expanded: false,
       });
 
       debugPane.addBlade({

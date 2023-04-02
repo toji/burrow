@@ -69,7 +69,7 @@ export class DeferredRenderer extends RendererBase {
 
   textureVisualizer: TextureVisualizer;
 
-  debugView: DebugViewType = DebugViewType.all;
+  debugView: DebugViewType = DebugViewType.none;
 
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;

@@ -37,7 +37,7 @@ export class DeferredRenderer extends RendererBase {
     lightAttachments;
     depthAttachment;
     textureVisualizer;
-    debugView = DebugViewType.all;
+    debugView = DebugViewType.none;
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
