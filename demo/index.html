@@ -162,13 +162,6 @@
         max: 2.5,
       });
 
-      debugPane.addInput(renderer, 'pointLights', {
-        step: 1,
-        min: 0,
-        max: 6,
-      });
-      debugPane.addInput(renderer, 'animateLights');
-
       debugPane.addButton({
         label: 'Cache',
         title: 'Clear',
@@ -176,6 +169,50 @@
         console.log('Clearing Cache');
         gltfLoader.clearCache();
       });
+
+      const pointLightColors = [
+        { color: [1.0, 1.0, 1.0], intensity: 3, range: 5 },
+        { color: [1.0, 0.3, 0.3], intensity: 1, range: 5 },
+        { color: [0.3, 1.0, 0.3], intensity: 2, range: 5 },
+        { color: [0.3, 0.3, 1.0], intensity: 1, range: 5 },
+        { color: [1.0, 1.0, 0.3], intensity: 2, range: 5 },
+        { color: [0.3, 1.0, 1.0], intensity: 2, range: 5 },
+      ];
+
+      const lightState = {
+        pointLightCount: pointLightColors.length,
+        pointLights: [],
+        animateLights: true,
+      };
+
+      function updatePointLights(timestamp) {
+        if (lightState.animateLights || lightState.pointLights.length == 0) {
+          lightState.pointLights = [];
+          for (let i = 0; i < lightState.pointLightCount; ++i) {
+            const r = (i / lightState.pointLightCount) * Math.PI * 2 + (timestamp/1000);
+            lightState.pointLights.push({
+              position: [
+                Math.sin(r) * 2.5,
+                Math.sin(timestamp / 1000 + (i / lightState.pointLightCount)) * 1.5,
+                Math.cos(r) * 2.5,
+              ],
+              ...pointLightColors[i % pointLightColors.length]
+            });
+          }
+        }
+      }
+
+      const lightsFolder = debugPane.addFolder({
+        title: 'Lights',
+        expanded: true,
+      });
+
+      lightsFolder.addInput(lightState, 'pointLightCount', {
+        step: 1,
+        min: 0,
+        max: pointLightColors.length,
+      });
+      lightsFolder.addInput(lightState, 'animateLights');
 
       const stats = {
         fps: 0,
@@ -197,8 +234,6 @@
         max: 2
       });
 
-
-
       // Event handlers
       function onResize() {
         const dpr = Math.min(devicePixelRatio, 2);
@@ -216,6 +251,9 @@
         requestAnimationFrame(onFrame);
         const frameStart = performance.now();
         frameCount++;
+
+        updatePointLights(timestamp);
+        scene.pointLights = lightState.pointLights;
 
         const outputTexture = context.getCurrentTexture();
 

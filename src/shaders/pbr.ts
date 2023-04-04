@@ -1,4 +1,18 @@
-// Much of the shader used here was pulled from https://learnopengl.com/PBR/Lighting
+export const surfaceInfoStruct = /* wgsl */`
+  struct SurfaceInfo {
+    worldPos: vec3f,
+    V: vec3f, // normalized vector from the shading location to the eye
+    N: vec3f, // surface normal in the world space
+    specularColor: vec3f,
+    diffuseColor: vec3f,
+    metal: f32,
+    rough: f32,
+    f0: vec3f,
+    ao: f32,
+  };
+`;
+
+// Much of the shaders used here were pulled from https://learnopengl.com/PBR/Lighting
 // Thanks!
 export function PbrFunctions() {
   return /* wgsl */`
@@ -98,7 +112,6 @@ export function PbrFunctions() {
     fn pbrSurfaceColorIbl(surface: SurfaceInfo) -> vec3f {
       let NdotV = max(dot(surface.N, surface.V), 0);
       let R = reflect(-surface.V, surface.N);
-      //let R = 2 * dot( surface.V, surface.N ) * surface.N - surface.V;
 
       let kS = FresnelSchlickRoughness(NdotV, surface.f0, surface.rough);
       let kD = (1 - kS) * (1 - surface.metal);
@@ -108,8 +121,6 @@ export function PbrFunctions() {
       let prefilteredColor = getSpecularLightColor(R, surface.rough);
       let envBrdf = envBRDFApprox(surface.rough, NdotV);
       let specular = prefilteredColor * (surface.specularColor * envBrdf.x + envBrdf.y);
-
-      //let specular = vec3f(0);
 
       let ambient    = (kD * diffuse + specular) * surface.ao;
       return ambient;

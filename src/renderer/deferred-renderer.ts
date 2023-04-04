@@ -1,7 +1,7 @@
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js'
-import { getGBufferShader, lightingShader } from '../shaders/deferred.js';
+import { getGBufferShader, getLightingShader } from '../shaders/deferred.js';
 import { toneMappingShader } from '../shaders/tonemap.js';
-import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Vec3, Vec3Like, Vec4Like } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
@@ -25,12 +25,6 @@ interface Camera {
   position: Vec3,
 }
 
-const MAX_LIGHTS = 64;
-const LIGHT_STRUCT_SIZE = 32;
-const LIGHT_BUFFER_SIZE = (MAX_LIGHTS * LIGHT_STRUCT_SIZE) + 16;
-
-const LIGHT_COUNT = 6;
-
 const MAX_INSTANCES = 1024;
 const INSTANCE_SIZE = 64;
 
@@ -44,8 +38,23 @@ export interface SceneMesh {
   material?: RenderMaterial,
 }
 
+export interface DirectionalLight {
+  direction: Vec3Like;
+  color?: Vec4Like;
+  intensity?: number;
+}
+
+export interface PointLight {
+  position: Vec3Like;
+  range?: number;
+  color?: Vec3Like;
+  intensity?: number;
+}
+
 export interface Scene {
   meshes: SceneMesh[];
+  directionalLight?: DirectionalLight;
+  pointLights?: PointLight[];
 }
 
 interface GeometryInstances {
@@ -74,8 +83,6 @@ export class DeferredRenderer extends RendererBase {
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;
   cameraBuffer: GPUBuffer;
-  lightBuffer: GPUBuffer;
-  lightArrayBuffer: ArrayBuffer;
 
   projection: Mat4;
 
@@ -94,18 +101,10 @@ export class DeferredRenderer extends RendererBase {
 
   #exposure: Float32Array = new Float32Array(4);
 
-  lightingPipeline: GPURenderPipeline;
-
   lightSpriteRenderer: LightSpriteRenderer;
   skyboxRenderer: SkyboxRenderer;
 
   defaultMaterial: RenderMaterial;
-  pointLights: number = 6;
-  animateLights: boolean = true;
-
-  #environment: GPUTexture; // IBL Map
-  defaultEnvironment: GPUTexture;
-  environmentSampler: GPUSampler;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -119,46 +118,12 @@ export class DeferredRenderer extends RendererBase {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
-    this.lightArrayBuffer = new ArrayBuffer(LIGHT_BUFFER_SIZE);
-    this.lightBuffer = device.createBuffer({
-      label: 'light storage buffer',
-      size: LIGHT_BUFFER_SIZE,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-    });
-
     this.instanceArray = new Float32Array(MAX_INSTANCES * INSTANCE_SIZE / Float32Array.BYTES_PER_ELEMENT);
     this.instanceBuffer = device.createBuffer({
       label: 'instance transform storage buffer',
       size: MAX_INSTANCES * INSTANCE_SIZE,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
-
-    const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
-    lightCount[0] = this.pointLights;
-
-    const lightColors = [
-      [1.0, 1.0, 1.0,  3],
-      [1.0, 0.3, 0.3,  1],
-      [0.3, 1.0, 0.3,  2],
-      [0.3, 0.3, 1.0,  1],
-      [1.0, 1.0, 0.3,  2],
-      [0.3, 1.0, 1.0,  2],
-      [1.0, 0.3, 1.0,  1],
-    ];
-
-    for (let i = 0; i < this.pointLights; ++i) {
-      const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
-      const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
-      const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
-
-      const r = (i / this.pointLights) * Math.PI * 2;
-      posRange[0] = Math.sin(r) * 2.5;
-      posRange[1] = 0;
-      posRange[2] = Math.cos(r) * 2.5;
-      posRange[3] = 5;
-
-      colorIntensity.set(lightColors[i % lightColors.length]);
-    }
 
     this.toneMappingBuffer = device.createBuffer({
       label: 'tone mapping uniform buffer',
@@ -167,24 +132,6 @@ export class DeferredRenderer extends RendererBase {
     });
 
     this.exposure = 1.0;
-
-    this.environmentSampler = device.createSampler({
-      label: 'environment sampler',
-      minFilter: 'linear',
-      magFilter: 'linear',
-      mipmapFilter: 'linear',
-      addressModeU: 'repeat',
-      addressModeV: 'repeat',
-      addressModeW: 'repeat',
-    });
-
-    // A simple 1x1 black environment map
-    this.defaultEnvironment = device.createTexture({
-      label: 'default environment map',
-      size: [1, 1, 6],
-      usage: GPUTextureUsage.TEXTURE_BINDING,
-      format: 'rg11b10ufloat',
-    });
 
     this.frameBindGroupLayout = device.createBindGroupLayout({
       label: 'frame bind group layout',
@@ -261,7 +208,8 @@ export class DeferredRenderer extends RendererBase {
       }]
     });
 
-    this.lightingPipeline = this.createLightingPipeline();
+    // Prime the lighting pipeline
+    this.getLightingPipeline();
 
     this.toneMappingPipeline = this.createToneMappingPipeline();
 
@@ -283,13 +231,13 @@ export class DeferredRenderer extends RendererBase {
         resource: { buffer: this.cameraBuffer }
       }, {
         binding: 1,
-        resource: { buffer: this.lightBuffer }
+        resource: { buffer: this.renderLightManager.lightBuffer }
       }, {
         binding: 2,
-        resource: this.environmentSampler,
+        resource: this.renderLightManager.environmentSampler,
       }, {
         binding: 3,
-        resource: (this.#environment || this.defaultEnvironment).createView({
+        resource: (this.renderLightManager.environment || this.renderLightManager.defaultEnvironment).createView({
           dimension: 'cube'
         })
       }]
@@ -297,12 +245,12 @@ export class DeferredRenderer extends RendererBase {
   }
 
   get environment(): GPUTexture {
-    return this.#environment;
+    return this.renderLightManager.environment;
   }
 
   set environment(environmentTexture: GPUTexture) {
     // TODO: Validate that it's a cube map?
-    this.#environment = environmentTexture;
+    this.renderLightManager.environment = environmentTexture;
     this.updateFrameBindGroup();
   }
 
@@ -365,17 +313,14 @@ export class DeferredRenderer extends RendererBase {
       view: this.rgbaTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      //clearValue: [0, 0, 1, 1],
     }, {
       view: this.normalTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      //clearValue: [0, 1, 0, 1],
     }, {
       view: this.metalRoughTexture.createView(),
       loadOp: 'clear',
       storeOp: 'store',
-      //clearValue: [1, 0, 0, 1],
     }, {
       view: this.lightTexture.createView(),
       loadOp: 'clear',
@@ -483,43 +428,54 @@ export class DeferredRenderer extends RendererBase {
     return pipeline;
   }
 
-  createLightingPipeline(): GPURenderPipeline {
-    const module = this.device.createShaderModule({
-      label: 'lighting shader module',
-      code: lightingShader
-    });
+  lightingPipelines = new Map<number, GPURenderPipeline>();
+  getLightingPipeline(): GPURenderPipeline {
+    const key = (this.environment ? 0x01 : 0) |
+                (this.renderLightManager.pointLightCount > 0 ? 0x02 : 0) |
+                0; // Directional Lights
 
-    const pipeline = this.device.createRenderPipeline({
-      label: 'lighting render pipeline',
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
-      vertex: {
-        module,
-        entryPoint: 'vertexMain',
-      },
-      depthStencil: {
-        depthCompare: 'always',
-        depthWriteEnabled: false,
-        format: 'depth16unorm',
-      },
-      fragment: {
-        module,
-        entryPoint: 'fragmentMain',
-        targets: [{
-          format: 'rgb10a2unorm',
-          blend: {
-            color: {
-              // Additive rendering
-              srcFactor: 'one',
-              dstFactor: 'one',
-            },
-            alpha: {
-              srcFactor: 'one',
-              dstFactor: 'one',
+    let pipeline = this.lightingPipelines.get(key);
+    if (!pipeline) {
+      console.log(`Creating new lighting pipeline: ${key}`);
+
+      const module = this.device.createShaderModule({
+        label: `lighting shader module ${key}`,
+        code: getLightingShader(!!this.environment, this.renderLightManager.pointLightCount > 0, false),
+      });
+
+      pipeline = this.device.createRenderPipeline({
+        label: `lighting render pipeline ${key}`,
+        layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
+        vertex: {
+          module,
+          entryPoint: 'vertexMain',
+        },
+        depthStencil: {
+          depthCompare: 'always',
+          depthWriteEnabled: false,
+          format: 'depth16unorm',
+        },
+        fragment: {
+          module,
+          entryPoint: 'fragmentMain',
+          targets: [{
+            format: 'rgb10a2unorm',
+            blend: {
+              color: {
+                // Additive rendering
+                srcFactor: 'one',
+                dstFactor: 'one',
+              },
+              alpha: {
+                srcFactor: 'one',
+                dstFactor: 'one',
+              }
             }
-          }
-        }],
-      },
-    });
+          }],
+        },
+      });
+      this.lightingPipelines.set(key, pipeline);
+    }
 
     return pipeline;
   }
@@ -561,29 +517,9 @@ export class DeferredRenderer extends RendererBase {
     this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
   }
 
-  updateLights(t: number) {
-    const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
-    lightCount[0] = this.pointLights;
-
-    if (this.animateLights) {
-      for (let i = 0; i < this.pointLights; ++i) {
-        const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE)
-        const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
-        //const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
-
-        const r = (i / this.pointLights) * Math.PI * 2 + (t/1000);
-        posRange[0] = Math.sin(r) * 2.5;
-        posRange[1] = Math.sin(t / 1000 + (i / this.pointLights)) * 1.5;
-        posRange[2] = Math.cos(r) * 2.5;
-      }
-    }
-
-    this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
-  }
-
   render(output: GPUTexture, camera: Camera, scene: Scene) {
     this.updateCamera(camera);
-    this.updateLights(performance.now());
+    this.renderLightManager.updateLights(scene);
 
     // Compile renderable list out of scene meshes.
     const pipelineMaterials = new Map<GPURenderPipeline, Map<RenderMaterial, Map<RenderGeometry, GeometryInstances>>>();
@@ -667,15 +603,6 @@ export class DeferredRenderer extends RendererBase {
           } else {
             gBufferPass.draw(geometry.drawCount, instances.instanceCount, 0, instances.firstInstance);
           }
-
-          /*for (const instance of instances) {
-            // TODO: Bind instance data
-            if (geometry.indexBuffer) {
-              gBufferPass.drawIndexed(geometry.drawCount);
-            } else {
-              gBufferPass.draw(geometry.drawCount);
-            }
-          }*/
         }
       }
     }
@@ -692,8 +619,7 @@ export class DeferredRenderer extends RendererBase {
     });
 
     // Light deferred surfaces
-
-    lightingPass.setPipeline(this.lightingPipeline);
+    lightingPass.setPipeline(this.getLightingPipeline());
     lightingPass.setBindGroup(0, this.frameBindGroup);
     lightingPass.setBindGroup(1, this.gBufferBindGroup);
     lightingPass.draw(3);
@@ -717,7 +643,7 @@ export class DeferredRenderer extends RendererBase {
       this.skyboxRenderer.render(forwardPass);
     }
 
-    this.lightSpriteRenderer.render(forwardPass, this.pointLights);
+    this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
 
     forwardPass.end();
 
