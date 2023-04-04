@@ -1,5 +1,5 @@
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
-import { getGBufferShader, lightingShader } from '../shaders/deferred.js';
+import { getGBufferShader, getLightingShader } from '../shaders/deferred.js';
 import { toneMappingShader } from '../shaders/tonemap.js';
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
@@ -17,10 +17,6 @@ export var DebugViewType;
     DebugViewType["all"] = "all";
 })(DebugViewType || (DebugViewType = {}));
 ;
-const MAX_LIGHTS = 64;
-const LIGHT_STRUCT_SIZE = 32;
-const LIGHT_BUFFER_SIZE = (MAX_LIGHTS * LIGHT_STRUCT_SIZE) + 16;
-const LIGHT_COUNT = 6;
 const MAX_INSTANCES = 1024;
 const INSTANCE_SIZE = 64;
 // To prevent per-frame allocations.
@@ -41,8 +37,6 @@ export class DeferredRenderer extends RendererBase {
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
-    lightBuffer;
-    lightArrayBuffer;
     projection;
     instanceBindGroupLayout;
     instanceBindGroup;
@@ -55,15 +49,9 @@ export class DeferredRenderer extends RendererBase {
     toneMappingPipeline;
     toneMappingBuffer;
     #exposure = new Float32Array(4);
-    lightingPipeline;
     lightSpriteRenderer;
     skyboxRenderer;
     defaultMaterial;
-    pointLights = 6;
-    animateLights = true;
-    #environment; // IBL Map
-    defaultEnvironment;
-    environmentSampler;
     constructor(device) {
         super(device);
         this.textureVisualizer = new TextureVisualizer(device);
@@ -73,62 +61,18 @@ export class DeferredRenderer extends RendererBase {
             size: 256,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
-        this.lightArrayBuffer = new ArrayBuffer(LIGHT_BUFFER_SIZE);
-        this.lightBuffer = device.createBuffer({
-            label: 'light storage buffer',
-            size: LIGHT_BUFFER_SIZE,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-        });
         this.instanceArray = new Float32Array(MAX_INSTANCES * INSTANCE_SIZE / Float32Array.BYTES_PER_ELEMENT);
         this.instanceBuffer = device.createBuffer({
             label: 'instance transform storage buffer',
             size: MAX_INSTANCES * INSTANCE_SIZE,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
-        const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
-        lightCount[0] = this.pointLights;
-        const lightColors = [
-            [1.0, 1.0, 1.0, 3],
-            [1.0, 0.3, 0.3, 1],
-            [0.3, 1.0, 0.3, 2],
-            [0.3, 0.3, 1.0, 1],
-            [1.0, 1.0, 0.3, 2],
-            [0.3, 1.0, 1.0, 2],
-            [1.0, 0.3, 1.0, 1],
-        ];
-        for (let i = 0; i < this.pointLights; ++i) {
-            const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE);
-            const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
-            const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
-            const r = (i / this.pointLights) * Math.PI * 2;
-            posRange[0] = Math.sin(r) * 2.5;
-            posRange[1] = 0;
-            posRange[2] = Math.cos(r) * 2.5;
-            posRange[3] = 5;
-            colorIntensity.set(lightColors[i % lightColors.length]);
-        }
         this.toneMappingBuffer = device.createBuffer({
             label: 'tone mapping uniform buffer',
             size: 16,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.exposure = 1.0;
-        this.environmentSampler = device.createSampler({
-            label: 'environment sampler',
-            minFilter: 'linear',
-            magFilter: 'linear',
-            mipmapFilter: 'linear',
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            addressModeW: 'repeat',
-        });
-        // A simple 1x1 black environment map
-        this.defaultEnvironment = device.createTexture({
-            label: 'default environment map',
-            size: [1, 1, 6],
-            usage: GPUTextureUsage.TEXTURE_BINDING,
-            format: 'rg11b10ufloat',
-        });
         this.frameBindGroupLayout = device.createBindGroupLayout({
             label: 'frame bind group layout',
             entries: [{
@@ -198,7 +142,8 @@ export class DeferredRenderer extends RendererBase {
                     buffer: {}
                 }]
         });
-        this.lightingPipeline = this.createLightingPipeline();
+        // Prime the lighting pipeline
+        this.getLightingPipeline();
         this.toneMappingPipeline = this.createToneMappingPipeline();
         this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
         this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
@@ -216,24 +161,24 @@ export class DeferredRenderer extends RendererBase {
                     resource: { buffer: this.cameraBuffer }
                 }, {
                     binding: 1,
-                    resource: { buffer: this.lightBuffer }
+                    resource: { buffer: this.renderLightManager.lightBuffer }
                 }, {
                     binding: 2,
-                    resource: this.environmentSampler,
+                    resource: this.renderLightManager.environmentSampler,
                 }, {
                     binding: 3,
-                    resource: (this.#environment || this.defaultEnvironment).createView({
+                    resource: (this.renderLightManager.environment || this.renderLightManager.defaultEnvironment).createView({
                         dimension: 'cube'
                     })
                 }]
         });
     }
     get environment() {
-        return this.#environment;
+        return this.renderLightManager.environment;
     }
     set environment(environmentTexture) {
         // TODO: Validate that it's a cube map?
-        this.#environment = environmentTexture;
+        this.renderLightManager.environment = environmentTexture;
         this.updateFrameBindGroup();
     }
     get exposure() {
@@ -285,17 +230,14 @@ export class DeferredRenderer extends RendererBase {
                 view: this.rgbaTexture.createView(),
                 loadOp: 'clear',
                 storeOp: 'store',
-                //clearValue: [0, 0, 1, 1],
             }, {
                 view: this.normalTexture.createView(),
                 loadOp: 'clear',
                 storeOp: 'store',
-                //clearValue: [0, 1, 0, 1],
             }, {
                 view: this.metalRoughTexture.createView(),
                 loadOp: 'clear',
                 storeOp: 'store',
-                //clearValue: [1, 0, 0, 1],
             }, {
                 view: this.lightTexture.createView(),
                 loadOp: 'clear',
@@ -394,42 +336,51 @@ export class DeferredRenderer extends RendererBase {
         this.#deferredPipelineCache.set(pipelineKey, pipeline);
         return pipeline;
     }
-    createLightingPipeline() {
-        const module = this.device.createShaderModule({
-            label: 'lighting shader module',
-            code: lightingShader
-        });
-        const pipeline = this.device.createRenderPipeline({
-            label: 'lighting render pipeline',
-            layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
-            vertex: {
-                module,
-                entryPoint: 'vertexMain',
-            },
-            depthStencil: {
-                depthCompare: 'always',
-                depthWriteEnabled: false,
-                format: 'depth16unorm',
-            },
-            fragment: {
-                module,
-                entryPoint: 'fragmentMain',
-                targets: [{
-                        format: 'rgb10a2unorm',
-                        blend: {
-                            color: {
-                                // Additive rendering
-                                srcFactor: 'one',
-                                dstFactor: 'one',
-                            },
-                            alpha: {
-                                srcFactor: 'one',
-                                dstFactor: 'one',
+    lightingPipelines = new Map();
+    getLightingPipeline() {
+        const key = (this.environment ? 0x01 : 0) |
+            (this.renderLightManager.pointLightCount > 0 ? 0x02 : 0) |
+            0; // Directional Lights
+        let pipeline = this.lightingPipelines.get(key);
+        if (!pipeline) {
+            console.log(`Creating new lighting pipeline: ${key}`);
+            const module = this.device.createShaderModule({
+                label: `lighting shader module ${key}`,
+                code: getLightingShader(!!this.environment, this.renderLightManager.pointLightCount > 0, false),
+            });
+            pipeline = this.device.createRenderPipeline({
+                label: `lighting render pipeline ${key}`,
+                layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
+                vertex: {
+                    module,
+                    entryPoint: 'vertexMain',
+                },
+                depthStencil: {
+                    depthCompare: 'always',
+                    depthWriteEnabled: false,
+                    format: 'depth16unorm',
+                },
+                fragment: {
+                    module,
+                    entryPoint: 'fragmentMain',
+                    targets: [{
+                            format: 'rgb10a2unorm',
+                            blend: {
+                                color: {
+                                    // Additive rendering
+                                    srcFactor: 'one',
+                                    dstFactor: 'one',
+                                },
+                                alpha: {
+                                    srcFactor: 'one',
+                                    dstFactor: 'one',
+                                }
                             }
-                        }
-                    }],
-            },
-        });
+                        }],
+                },
+            });
+            this.lightingPipelines.set(key, pipeline);
+        }
         return pipeline;
     }
     createToneMappingPipeline() {
@@ -463,25 +414,9 @@ export class DeferredRenderer extends RendererBase {
         cameraArray.set(camera.position, 48);
         this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
     }
-    updateLights(t) {
-        const lightCount = new Uint32Array(this.lightArrayBuffer, 0, 1);
-        lightCount[0] = this.pointLights;
-        if (this.animateLights) {
-            for (let i = 0; i < this.pointLights; ++i) {
-                const lightOffset = 16 + (i * LIGHT_STRUCT_SIZE);
-                const posRange = new Float32Array(this.lightArrayBuffer, lightOffset, 4);
-                //const colorIntensity = new Float32Array(this.lightArrayBuffer, lightOffset + 16, 4);
-                const r = (i / this.pointLights) * Math.PI * 2 + (t / 1000);
-                posRange[0] = Math.sin(r) * 2.5;
-                posRange[1] = Math.sin(t / 1000 + (i / this.pointLights)) * 1.5;
-                posRange[2] = Math.cos(r) * 2.5;
-            }
-        }
-        this.device.queue.writeBuffer(this.lightBuffer, 0, this.lightArrayBuffer);
-    }
     render(output, camera, scene) {
         this.updateCamera(camera);
-        this.updateLights(performance.now());
+        this.renderLightManager.updateLights(scene);
         // Compile renderable list out of scene meshes.
         const pipelineMaterials = new Map();
         const instanceList = [];
@@ -550,14 +485,6 @@ export class DeferredRenderer extends RendererBase {
                     else {
                         gBufferPass.draw(geometry.drawCount, instances.instanceCount, 0, instances.firstInstance);
                     }
-                    /*for (const instance of instances) {
-                      // TODO: Bind instance data
-                      if (geometry.indexBuffer) {
-                        gBufferPass.drawIndexed(geometry.drawCount);
-                      } else {
-                        gBufferPass.draw(geometry.drawCount);
-                      }
-                    }*/
                 }
             }
         }
@@ -571,7 +498,7 @@ export class DeferredRenderer extends RendererBase {
             }
         });
         // Light deferred surfaces
-        lightingPass.setPipeline(this.lightingPipeline);
+        lightingPass.setPipeline(this.getLightingPipeline());
         lightingPass.setBindGroup(0, this.frameBindGroup);
         lightingPass.setBindGroup(1, this.gBufferBindGroup);
         lightingPass.draw(3);
@@ -590,7 +517,7 @@ export class DeferredRenderer extends RendererBase {
         if (this.environment) {
             this.skyboxRenderer.render(forwardPass);
         }
-        this.lightSpriteRenderer.render(forwardPass, this.pointLights);
+        this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
         forwardPass.end();
         if (this.debugView == DebugViewType.none || this.debugView == DebugViewType.all) {
             const outputPass = encoder.beginRenderPass({

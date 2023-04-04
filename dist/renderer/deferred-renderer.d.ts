@@ -1,6 +1,6 @@
 /// <reference types="dist" />
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
-import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Vec3, Vec3Like, Vec4Like } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
@@ -26,8 +26,21 @@ export interface SceneMesh {
     geometry: RenderGeometry;
     material?: RenderMaterial;
 }
+export interface DirectionalLight {
+    direction: Vec3Like;
+    color?: Vec4Like;
+    intensity?: number;
+}
+export interface PointLight {
+    position: Vec3Like;
+    range?: number;
+    color?: Vec3Like;
+    intensity?: number;
+}
 export interface Scene {
     meshes: SceneMesh[];
+    directionalLight?: DirectionalLight;
+    pointLights?: PointLight[];
 }
 export declare class DeferredRenderer extends RendererBase {
     #private;
@@ -45,8 +58,6 @@ export declare class DeferredRenderer extends RendererBase {
     frameBindGroupLayout: GPUBindGroupLayout;
     frameBindGroup: GPUBindGroup;
     cameraBuffer: GPUBuffer;
-    lightBuffer: GPUBuffer;
-    lightArrayBuffer: ArrayBuffer;
     projection: Mat4;
     instanceBindGroupLayout: GPUBindGroupLayout;
     instanceBindGroup: GPUBindGroup;
@@ -58,14 +69,9 @@ export declare class DeferredRenderer extends RendererBase {
     toneMappingBindGroup: GPUBindGroup;
     toneMappingPipeline: GPURenderPipeline;
     toneMappingBuffer: GPUBuffer;
-    lightingPipeline: GPURenderPipeline;
     lightSpriteRenderer: LightSpriteRenderer;
     skyboxRenderer: SkyboxRenderer;
     defaultMaterial: RenderMaterial;
-    pointLights: number;
-    animateLights: boolean;
-    defaultEnvironment: GPUTexture;
-    environmentSampler: GPUSampler;
     constructor(device: GPUDevice);
     updateFrameBindGroup(): void;
     get environment(): GPUTexture;
@@ -74,10 +80,10 @@ export declare class DeferredRenderer extends RendererBase {
     set exposure(value: number);
     resize(width: number, height: number): void;
     getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline;
-    createLightingPipeline(): GPURenderPipeline;
+    lightingPipelines: Map<number, GPURenderPipeline>;
+    getLightingPipeline(): GPURenderPipeline;
     createToneMappingPipeline(): GPURenderPipeline;
     updateCamera(camera: Camera): void;
-    updateLights(t: number): void;
     render(output: GPUTexture, camera: Camera, scene: Scene): void;
 }
 export {};

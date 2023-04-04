@@ -4,7 +4,7 @@ import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-pr
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { AttributeLocation } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
-import { PbrFunctions } from './pbr.js';
+import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 
 export const cameraStruct = /* wgsl */`
   struct Camera {
@@ -17,6 +17,12 @@ export const cameraStruct = /* wgsl */`
 `;
 
 export const lightStruct = /* wgsl */`
+  struct DirectionalLight {
+    direction: vec3f,
+    color: vec3f,
+    intensity: f32,
+  };
+
   struct PointLight {
     position: vec3f,
     range: f32,
@@ -25,22 +31,9 @@ export const lightStruct = /* wgsl */`
   };
 
   struct Lights {
+    directionalLight: DirectionalLight,
     pointLightCount: u32,
     pointLights: array<PointLight>,
-  };
-`;
-
-export const surfaceInfoStruct = /* wgsl */`
-  struct SurfaceInfo {
-    worldPos: vec3f,
-    V: vec3f, // normalized vector from the shading location to the eye
-    N: vec3f, // surface normal in the world space
-    specularColor: vec3f,
-    diffuseColor: vec3f,
-    metal: f32,
-    rough: f32,
-    f0: vec3f,
-    ao: f32,
   };
 `;
 
@@ -176,102 +169,117 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>, material: Ren
   `;
 }
 
-export const lightingShader = /* wgsl */`
-  ${cameraStruct}
-  @group(0) @binding(0) var<uniform> camera : Camera;
+export function getLightingShader(useEnvLight: boolean, usePointLights: boolean, useDirLight: boolean) {
+  return wgsl`
+    ${cameraStruct}
+    @group(0) @binding(0) var<uniform> camera : Camera;
 
-  ${lightStruct}
-  @group(0) @binding(1) var<storage> lights : Lights;
+    ${lightStruct}
+    @group(0) @binding(1) var<storage> lights : Lights;
 
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
-    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
+    const pos : array<vec2f, 3> = array<vec2f, 3>(
+      vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
 
-  @vertex
-  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-    return vec4f(pos[i], 0, 1);
-  }
-
-  @group(0) @binding(2) var environmentSampler : sampler;
-  @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
-
-  @group(1) @binding(0) var colorTexture: texture_2d<f32>;
-  @group(1) @binding(1) var normalTexture: texture_2d<f32>;
-  @group(1) @binding(2) var metalRoughTexture: texture_2d<f32>;
-  @group(1) @binding(3) var depthTexture: texture_depth_2d;
-
-  fn worldPosFromDepth(texcoord: vec2f, depth: f32) -> vec3f {
-    let clipSpacePos = vec4f((texcoord * 2 - 1) * vec2f(1, -1), depth, 1);
-    let worldPos = camera.invViewProjection * clipSpacePos;
-    return (worldPos.xyz / worldPos.w);
-  }
-
-  ${surfaceInfoStruct}
-
-  const MIN_ROUGHNESS = 0.045;
-  //const MIN_ROUGHNESS = 0.089; // For fp16
-
-  fn surfaceInfoFromDeferred(pixelCoord: vec2u) -> SurfaceInfo {
-    let targetSize = vec2f(textureDimensions(colorTexture, 0));
-
-    let depth = textureLoad(depthTexture, pixelCoord, 0);
-
-    var surface: SurfaceInfo;
-
-    surface.worldPos = worldPosFromDepth((vec2f(pixelCoord) / targetSize), depth);
-    surface.V = normalize(camera.position - surface.worldPos);
-
-    let normal = textureLoad(normalTexture, pixelCoord, 0);
-    surface.N = normalize(2 * normal.xyz - 1);
-
-    let color = textureLoad(colorTexture, pixelCoord, 0);
-    surface.ao = color.a;
-
-    let metalRough = textureLoad(metalRoughTexture, pixelCoord, 0);
-    surface.metal = metalRough.r;
-    surface.rough = clamp(metalRough.g, MIN_ROUGHNESS, 1.0);
-
-    surface.diffuseColor = color.rgb * (1 - surface.metal);
-    surface.specularColor = color.rgb * surface.metal;
-
-    let dielectricSpec = vec3f(0.04);
-    surface.f0 = mix(dielectricSpec, color.rgb, vec3f(surface.metal));
-
-    return surface;
-  }
-
-  ${PbrFunctions()}
-
-  fn pointLightAttenuation(worldToLight: vec3f, lightRange: f32) -> f32 {
-    let dist = length(worldToLight);
-    return clamp(1 - pow(dist / lightRange, 4), 0, 1) / pow(dist, 2);
-  }
-
-  fn pbrPointLight(light : PointLight, surface: SurfaceInfo) -> vec3f {
-    let worldToLight = light.position - surface.worldPos;
-
-    let L = normalize(worldToLight);
-    let attenuation = pointLightAttenuation(worldToLight, light.range);
-
-    return pbrSurfaceColor(L, surface, light.color, light.intensity, attenuation);
-  }
-
-  @fragment
-  fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let surface = surfaceInfoFromDeferred(vec2u(pos.xy));
-
-    // Emmissive is handled directly in the gBuffer pass
-
-    var Lo = pbrSurfaceColorIbl(surface);
-    //var Lo = vec3f(0);
-
-    // Point lights
-    for (var i: u32 = 0; i < lights.pointLightCount; i++) {
-      let light = &lights.pointLights[i];
-
-      // calculate per-light radiance and add to outgoing radiance Lo
-      Lo += pbrPointLight(*light, surface);
+    @vertex
+    fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+      return vec4f(pos[i], 0, 1);
     }
 
-    return vec4f(Lo, 1);
-  }
-`;
+    @group(0) @binding(2) var environmentSampler : sampler;
+    @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
+
+    @group(1) @binding(0) var colorTexture: texture_2d<f32>;
+    @group(1) @binding(1) var normalTexture: texture_2d<f32>;
+    @group(1) @binding(2) var metalRoughTexture: texture_2d<f32>;
+    @group(1) @binding(3) var depthTexture: texture_depth_2d;
+
+    fn worldPosFromDepth(texcoord: vec2f, depth: f32) -> vec3f {
+      let clipSpacePos = vec4f((texcoord * 2 - 1) * vec2f(1, -1), depth, 1);
+      let worldPos = camera.invViewProjection * clipSpacePos;
+      return (worldPos.xyz / worldPos.w);
+    }
+
+    ${surfaceInfoStruct}
+
+    const MIN_ROUGHNESS = 0.045;
+    //const MIN_ROUGHNESS = 0.089; // For fp16
+
+    fn surfaceInfoFromDeferred(pixelCoord: vec2u) -> SurfaceInfo {
+      let targetSize = vec2f(textureDimensions(colorTexture, 0));
+
+      let depth = textureLoad(depthTexture, pixelCoord, 0);
+
+      var surface: SurfaceInfo;
+
+      surface.worldPos = worldPosFromDepth((vec2f(pixelCoord) / targetSize), depth);
+      surface.V = normalize(camera.position - surface.worldPos);
+
+      let normal = textureLoad(normalTexture, pixelCoord, 0);
+      surface.N = normalize(2 * normal.xyz - 1);
+
+      let color = textureLoad(colorTexture, pixelCoord, 0);
+      surface.ao = color.a;
+
+      let metalRough = textureLoad(metalRoughTexture, pixelCoord, 0);
+      surface.metal = metalRough.r;
+      surface.rough = clamp(metalRough.g, MIN_ROUGHNESS, 1.0);
+
+      surface.diffuseColor = color.rgb * (1 - surface.metal);
+      surface.specularColor = color.rgb * surface.metal;
+
+      let dielectricSpec = vec3f(0.04);
+      surface.f0 = mix(dielectricSpec, color.rgb, vec3f(surface.metal));
+
+      return surface;
+    }
+
+    ${PbrFunctions()}
+
+    fn pointLightAttenuation(worldToLight: vec3f, lightRange: f32) -> f32 {
+      let dist = length(worldToLight);
+      return clamp(1 - pow(dist / lightRange, 4), 0, 1) / pow(dist, 2);
+    }
+
+    fn pbrDirectionalLight(light : DirectionalLight, surface: SurfaceInfo) -> vec3f {
+      return pbrSurfaceColor(normalize(light.direction), surface, light.color, light.intensity, 1);
+    }
+
+    fn pbrPointLight(light : PointLight, surface: SurfaceInfo) -> vec3f {
+      let worldToLight = light.position - surface.worldPos;
+
+      let L = normalize(worldToLight);
+      let attenuation = pointLightAttenuation(worldToLight, light.range);
+
+      return pbrSurfaceColor(L, surface, light.color, light.intensity, attenuation);
+    }
+
+    @fragment
+    fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
+      let surface = surfaceInfoFromDeferred(vec2u(pos.xy));
+
+      // Emmissive is handled directly in the gBuffer pass
+
+#if ${useEnvLight}
+      var Lo = pbrSurfaceColorIbl(surface);
+#else
+      var Lo = vec3f(0);
+#endif
+
+#if ${useDirLight}
+      Lo += pbrDirectionalLight(lights.directionalLight, surface);
+#endif
+
+#if ${usePointLights}
+      // Point lights
+      for (var i: u32 = 0; i < lights.pointLightCount; i++) {
+        let light = &lights.pointLights[i];
+
+        // calculate per-light radiance and add to outgoing radiance Lo
+        Lo += pbrPointLight(*light, surface);
+      }
+#endif
+
+      return vec4f(Lo, 1);
+    }
+  `;
+}
