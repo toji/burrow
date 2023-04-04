@@ -1,10 +1,10 @@
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
 import { getGBufferShader, getLightingShader } from '../shaders/deferred.js';
-import { toneMappingShader } from '../shaders/tonemap.js';
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { SkyboxRenderer } from '../render-utils/skybox.js';
+import { TonemapRenderer } from '../render-utils/tonemap.js';
 export var DebugViewType;
 (function (DebugViewType) {
     DebugViewType["none"] = "none";
@@ -44,13 +44,9 @@ export class DeferredRenderer extends RendererBase {
     instanceArray;
     gBufferBindGroupLayout;
     gBufferBindGroup;
-    toneMappingBindGroupLayout;
-    toneMappingBindGroup;
-    toneMappingPipeline;
-    toneMappingBuffer;
-    #exposure = new Float32Array(4);
     lightSpriteRenderer;
     skyboxRenderer;
+    tonemapRenderer;
     defaultMaterial;
     constructor(device) {
         super(device);
@@ -67,12 +63,6 @@ export class DeferredRenderer extends RendererBase {
             size: MAX_INSTANCES * INSTANCE_SIZE,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
-        this.toneMappingBuffer = device.createBuffer({
-            label: 'tone mapping uniform buffer',
-            size: 16,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-        });
-        this.exposure = 1.0;
         this.frameBindGroupLayout = device.createBindGroupLayout({
             label: 'frame bind group layout',
             entries: [{
@@ -130,23 +120,11 @@ export class DeferredRenderer extends RendererBase {
                     texture: { sampleType: 'depth' }
                 }]
         });
-        this.toneMappingBindGroupLayout = device.createBindGroupLayout({
-            label: 'tone mapping bind group layout',
-            entries: [{
-                    binding: 0,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    texture: { sampleType: 'unfilterable-float' }
-                }, {
-                    binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    buffer: {}
-                }]
-        });
         // Prime the lighting pipeline
         this.getLightingPipeline();
-        this.toneMappingPipeline = this.createToneMappingPipeline();
         this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
         this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
+        this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
         this.defaultMaterial = this.createMaterial({
             label: 'Default Material',
             baseColorFactor: [0, 1, 0, 1],
@@ -180,13 +158,6 @@ export class DeferredRenderer extends RendererBase {
         // TODO: Validate that it's a cube map?
         this.renderLightManager.environment = environmentTexture;
         this.updateFrameBindGroup();
-    }
-    get exposure() {
-        return this.#exposure[0];
-    }
-    set exposure(value) {
-        this.#exposure[0] = value;
-        this.device.queue.writeBuffer(this.toneMappingBuffer, 0, this.#exposure);
     }
     resize(width, height) {
         if (this.attachmentSize.width == width &&
@@ -271,17 +242,7 @@ export class DeferredRenderer extends RendererBase {
                     resource: this.depthAttachment.view,
                 }]
         });
-        this.toneMappingBindGroup = this.device.createBindGroup({
-            label: 'tone mapping bind group',
-            layout: this.toneMappingBindGroupLayout,
-            entries: [{
-                    binding: 0,
-                    resource: this.lightAttachments[0].view,
-                }, {
-                    binding: 1,
-                    resource: { buffer: this.toneMappingBuffer },
-                }]
-        });
+        this.tonemapRenderer.updateInputTexture(this.lightAttachments[0].view);
     }
     #deferredPipelineCache = new Map();
     getDeferredPipeline(layout, material) {
@@ -343,7 +304,6 @@ export class DeferredRenderer extends RendererBase {
             0; // Directional Lights
         let pipeline = this.lightingPipelines.get(key);
         if (!pipeline) {
-            console.log(`Creating new lighting pipeline: ${key}`);
             const module = this.device.createShaderModule({
                 label: `lighting shader module ${key}`,
                 code: getLightingShader(!!this.environment, this.renderLightManager.pointLightCount > 0, false),
@@ -381,28 +341,6 @@ export class DeferredRenderer extends RendererBase {
             });
             this.lightingPipelines.set(key, pipeline);
         }
-        return pipeline;
-    }
-    createToneMappingPipeline() {
-        const module = this.device.createShaderModule({
-            label: 'tone mapping shader module',
-            code: toneMappingShader
-        });
-        const pipeline = this.device.createRenderPipeline({
-            label: 'tone mapping pipeline',
-            layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.toneMappingBindGroupLayout] }),
-            vertex: {
-                module,
-                entryPoint: 'vertexMain',
-            },
-            fragment: {
-                module,
-                entryPoint: 'fragmentMain',
-                targets: [{
-                        format: navigator.gpu.getPreferredCanvasFormat(),
-                    }],
-            },
-        });
         return pipeline;
     }
     updateCamera(camera) {
@@ -530,9 +468,7 @@ export class DeferredRenderer extends RendererBase {
                     }],
             });
             // Tone map
-            outputPass.setPipeline(this.toneMappingPipeline);
-            outputPass.setBindGroup(0, this.toneMappingBindGroup);
-            outputPass.draw(3);
+            this.tonemapRenderer.render(outputPass);
             // Blur
             // Maybe post-process AA?
             // Profit???

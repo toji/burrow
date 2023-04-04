@@ -7,6 +7,7 @@ import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
 import { SkyboxRenderer } from '../render-utils/skybox.js';
+import { TonemapRenderer } from '../render-utils/tonemap.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -65,24 +66,18 @@ export declare class DeferredRenderer extends RendererBase {
     instanceArray: Float32Array;
     gBufferBindGroupLayout: GPUBindGroupLayout;
     gBufferBindGroup: GPUBindGroup;
-    toneMappingBindGroupLayout: GPUBindGroupLayout;
-    toneMappingBindGroup: GPUBindGroup;
-    toneMappingPipeline: GPURenderPipeline;
-    toneMappingBuffer: GPUBuffer;
     lightSpriteRenderer: LightSpriteRenderer;
     skyboxRenderer: SkyboxRenderer;
+    tonemapRenderer: TonemapRenderer;
     defaultMaterial: RenderMaterial;
     constructor(device: GPUDevice);
     updateFrameBindGroup(): void;
     get environment(): GPUTexture;
     set environment(environmentTexture: GPUTexture);
-    get exposure(): number;
-    set exposure(value: number);
     resize(width: number, height: number): void;
     getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline;
     lightingPipelines: Map<number, GPURenderPipeline>;
     getLightingPipeline(): GPURenderPipeline;
-    createToneMappingPipeline(): GPURenderPipeline;
     updateCamera(camera: Camera): void;
     render(output: GPUTexture, camera: Camera, scene: Scene): void;
 }

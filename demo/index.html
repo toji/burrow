@@ -156,12 +156,6 @@
         renderer.debugView = ev.value;
       });
 
-      debugPane.addInput(renderer, 'exposure', {
-        step: 0.1,
-        min: 0.1,
-        max: 2.5,
-      });
-
       debugPane.addButton({
         label: 'Cache',
         title: 'Clear',
@@ -205,6 +199,12 @@
       const lightsFolder = debugPane.addFolder({
         title: 'Lights',
         expanded: true,
+      });
+
+      lightsFolder.addInput(renderer.tonemapRenderer, 'exposure', {
+        step: 0.1,
+        min: 0.1,
+        max: 2.5,
       });
 
       lightsFolder.addInput(lightState, 'pointLightCount', {

@@ -1,4 +1,4 @@
-import { cameraStruct, lightStruct } from "../shaders/deferred.js";
+import { cameraStruct, lightStruct } from "../shaders/common.js";
 const lightSpriteShader = /*wgsl*/ `
   ${cameraStruct}
   @group(0) @binding(0) var<uniform> camera : Camera;
