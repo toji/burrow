@@ -46,7 +46,6 @@ export class RenderLightManager {
 
   updateLights(scene: Scene) {
     // TODO: This shouldn't have to be updated every frame, but whatever.
-
     this.pointLightCount = Math.min(scene.pointLights?.length || 0, MAX_POINT_LIGHTS);
 
     const pointLightCount = new Uint32Array(this.lightArrayBuffer, DIRECTIONAL_LIGHT_STRUCT_SIZE, 1);

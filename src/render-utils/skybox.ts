@@ -1,4 +1,4 @@
-import { cameraStruct, lightStruct } from "../shaders/deferred.js";
+import { cameraStruct, lightStruct } from "../shaders/common.js";
 
 const SKYBOX_SHADER = /*wgsl*/`
   ${cameraStruct}
