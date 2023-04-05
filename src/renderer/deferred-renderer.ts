@@ -201,7 +201,6 @@ export class DeferredRenderer extends RendererBase {
   textureVisualizer: TextureVisualizer;
 
   debugView: DebugViewType = DebugViewType.none;
-  enableBloom: boolean = true;
 
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;
@@ -422,8 +421,9 @@ export class DeferredRenderer extends RendererBase {
       }]
     });
 
-    this.tonemapRenderer.updateInputTexture(this.lightTexture);
     this.bloomRenderer.updateInputTexture(this.lightTexture);
+    this.tonemapRenderer.updateInputTexture(this.lightTexture);
+    this.tonemapRenderer.updateBloomTexture(this.bloomRenderer.intermediateTexture);
   }
 
   lightingPipelines = new Map<number, GPURenderPipeline>();
@@ -579,7 +579,9 @@ export class DeferredRenderer extends RendererBase {
 
     forwardPass.end();
 
-    if (this.enableBloom) {
+    const enableBloom = this.tonemapRenderer.bloomStrength > 0;
+
+    if (enableBloom) {
       this.bloomRenderer.render(encoder);
     }
 
@@ -644,7 +646,7 @@ export class DeferredRenderer extends RendererBase {
           addPreview(this.normalTexture);
           addPreview(this.metalRoughTexture);
           addPreview(this.depthTexture);
-          if (this.enableBloom) {
+          if (enableBloom) {
             addPreview(this.bloomRenderer.intermediateTexture);
           }
           addPreview(this.lightTexture);
@@ -672,7 +674,7 @@ export class DeferredRenderer extends RendererBase {
           break;
 
         case DebugViewType.bloom:
-          if (this.enableBloom) {
+          if (enableBloom) {
             this.textureVisualizer.render(debugPass, this.bloomRenderer.intermediateTexture);
           }
           break;

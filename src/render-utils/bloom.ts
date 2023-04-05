@@ -46,14 +46,14 @@ export const bloomShader = /* wgsl */`
     return vec4f(downsample, 1);
   }
 
-  const filterRadius = 5;
+  const filterRadius = 0.005;
 
   @fragment
   fn upsampleMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
     let texelSize = 1.0 / vec2f(textureDimensions(sourceTexture));
     let texcoord = pos.xy * texelSize / 2;
-    let x = texelSize.x * filterRadius;
-    let y = texelSize.y * filterRadius;
+    let x = filterRadius;
+    let y = filterRadius;
 
     let a = textureSample(sourceTexture, sourceSampler, vec2f(texcoord.x - x, texcoord.y + y)).rgb;
     let b = textureSample(sourceTexture, sourceSampler, vec2f(texcoord.x,     texcoord.y + y)).rgb;
@@ -71,7 +71,7 @@ export const bloomShader = /* wgsl */`
     upsample += (b+d+f+h)*2.0;
     upsample += (a+c+g+i);
     upsample *= 1.0 / 16.0;
-    return vec4f(upsample, 0.1);
+    return vec4f(upsample, 1);
   }
 `;
 
@@ -80,7 +80,6 @@ export class BloomRenderer {
   bindGroups: GPUBindGroup[];
   downsamplePipeline: GPURenderPipeline;
   upsamplePipeline: GPURenderPipeline;
-  finalUpsamplePipeline: GPURenderPipeline;
 
   sampler: GPUSampler;
 
@@ -150,32 +149,6 @@ export class BloomRenderer {
       },
     });
 
-    this.finalUpsamplePipeline = this.device.createRenderPipeline({
-      label: 'bloom final upsample pipeline',
-      layout: pipelineLayout,
-      vertex: {
-        module,
-        entryPoint: 'vertexMain',
-      },
-      fragment: {
-        module,
-        entryPoint: 'upsampleMain',
-        targets: [{
-          format,
-          blend: {
-            color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one',
-            },
-            alpha: {
-              srcFactor: 'one',
-              dstFactor: 'zero',
-            }
-          }
-        }],
-      },
-    });
-
     this.sampler = device.createSampler({
       label: 'bloom sampler',
       minFilter: 'linear',
@@ -223,6 +196,8 @@ export class BloomRenderer {
     }
   }
 
+  // Produces a bloom texture but does not mix it with the lighting buffer.
+  // That happens during tone mapping.
   render(encoder: GPUCommandEncoder) {
     if (!this.inputTextureView) { return; }
 
@@ -247,11 +222,11 @@ export class BloomRenderer {
     }
 
     // Upsample steps
-    for (let i = BLOOM_STEPS - 1; i > 0; --i) {
+    for (let i = BLOOM_STEPS-1; i > 0; --i) {
       let renderPass = encoder.beginRenderPass({
         colorAttachments: [{
           view: this.intermediateTexture.createView({
-            baseMipLevel: i,
+            baseMipLevel: i-1,
             mipLevelCount: 1,
           }),
           loadOp: 'load',
@@ -260,25 +235,10 @@ export class BloomRenderer {
       });
 
       renderPass.setPipeline(this.upsamplePipeline);
-      renderPass.setBindGroup(0, this.bindGroups[i]);
+      renderPass.setBindGroup(0, this.bindGroups[i+1]);
       renderPass.draw(3);
 
       renderPass.end();
     }
-
-    // Final output pass
-    let renderPass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: this.inputTextureView,
-        loadOp: 'load',
-        storeOp: 'store',
-      }]
-    });
-
-    renderPass.setPipeline(this.finalUpsamplePipeline);
-    renderPass.setBindGroup(0, this.bindGroups[1]);
-    renderPass.draw(3);
-
-    renderPass.end();
   }
 }

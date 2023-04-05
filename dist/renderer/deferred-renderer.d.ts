@@ -72,7 +72,6 @@ export declare class DeferredRenderer extends RendererBase {
     depthAttachment: GPURenderPassDepthStencilAttachment;
     textureVisualizer: TextureVisualizer;
     debugView: DebugViewType;
-    enableBloom: boolean;
     frameBindGroupLayout: GPUBindGroupLayout;
     frameBindGroup: GPUBindGroup;
     cameraBuffer: GPUBuffer;

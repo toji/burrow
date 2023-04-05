@@ -153,7 +153,6 @@ export class DeferredRenderer extends RendererBase {
     depthAttachment;
     textureVisualizer;
     debugView = DebugViewType.none;
-    enableBloom = true;
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
@@ -342,8 +341,9 @@ export class DeferredRenderer extends RendererBase {
                     resource: this.depthAttachment.view,
                 }]
         });
-        this.tonemapRenderer.updateInputTexture(this.lightTexture);
         this.bloomRenderer.updateInputTexture(this.lightTexture);
+        this.tonemapRenderer.updateInputTexture(this.lightTexture);
+        this.tonemapRenderer.updateBloomTexture(this.bloomRenderer.intermediateTexture);
     }
     lightingPipelines = new Map();
     getLightingPipeline() {
@@ -471,7 +471,8 @@ export class DeferredRenderer extends RendererBase {
         }
         this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
         forwardPass.end();
-        if (this.enableBloom) {
+        const enableBloom = this.tonemapRenderer.bloomStrength > 0;
+        if (enableBloom) {
             this.bloomRenderer.render(encoder);
         }
         if (this.debugView == DebugViewType.none || this.debugView == DebugViewType.all) {
@@ -524,7 +525,7 @@ export class DeferredRenderer extends RendererBase {
                     addPreview(this.normalTexture);
                     addPreview(this.metalRoughTexture);
                     addPreview(this.depthTexture);
-                    if (this.enableBloom) {
+                    if (enableBloom) {
                         addPreview(this.bloomRenderer.intermediateTexture);
                     }
                     addPreview(this.lightTexture);
@@ -546,7 +547,7 @@ export class DeferredRenderer extends RendererBase {
                     this.textureVisualizer.render(debugPass, this.depthTexture);
                     break;
                 case DebugViewType.bloom:
-                    if (this.enableBloom) {
+                    if (enableBloom) {
                         this.textureVisualizer.render(debugPass, this.bloomRenderer.intermediateTexture);
                     }
                     break;
