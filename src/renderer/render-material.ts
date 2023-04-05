@@ -113,7 +113,7 @@ export class RenderMaterialManager {
         resource: desc.metallicRoughnessTexture?.createView() ?? this.opaqueWhite,
       }, {
         binding: 5,
-        resource: desc.emissiveTexture?.createView() ?? this.transparentBlack,
+        resource: desc.emissiveTexture?.createView() ?? this.opaqueWhite,
       }, {
         binding: 6,
         resource: desc.occlusionTexture?.createView() ?? this.opaqueWhite,

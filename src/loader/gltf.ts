@@ -1,4 +1,4 @@
-import { Mat4 } from '../../third-party/gl-matrix/dist/src/mat4.js';
+import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
 import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
 import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
@@ -89,6 +89,10 @@ export class GltfLoader {
     for (const material of (gltf.materials as any[])) {
       let unlit = (!!material.extensions?.KHR_materials_unlit);
 
+      const emissiveStrength: number = material.extensions?.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
+      const emissiveFactor = new Vec3(material.emissiveFactor || 1);
+      emissiveFactor.scale(emissiveStrength);
+
       renderMaterials.push(this.renderer.createMaterial({
         label: material.name,
         baseColorFactor: material.pbrMetallicRoughness?.baseColorFactor,
@@ -99,7 +103,7 @@ export class GltfLoader {
         normalTexture: getTexture(material.normalTexture),
         occlusionTexture: getTexture(material.occlusionTexture),
         occlusionStrength: material.occlusionTexture?.strength,
-        emissiveFactor: material.emissiveFactor,
+        emissiveFactor,
         emissiveTexture: getTexture(material.emissiveTexture),
         transparent: material.alphaMode == 'BLEND',
         alphaCutoff: material.alphaMode == 'MASK' ? (material.alphaCutoff ?? 0.5) : 0,
