@@ -43,8 +43,6 @@ export const toneMappingShader = /* wgsl */`
     return vec4f(tonemappedColor, 1);
   }
 
-  const bloomStrength = 0.04;
-
   @fragment
   fn fragmentBloomMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
     let pixelCoord = vec2u(pos.xy);
@@ -219,10 +217,10 @@ export class TonemapRenderer {
     });
   }
 
-  render(renderPass: GPURenderPassEncoder) {
+  render(renderPass: GPURenderPassEncoder, enableBloom: boolean = true) {
     if (!this.bindGroup) { return; }
 
-    const enableBloom = this.bloomStrength > 0 && this.bloomTextureView;
+    enableBloom = enableBloom && this.bloomStrength > 0 && this.bloomTextureView !== null;
 
     // Tonemap the input texture
     renderPass.setPipeline(enableBloom ? this.bloomPipeline : this.pipeline);
