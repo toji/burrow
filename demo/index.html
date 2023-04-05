@@ -223,18 +223,28 @@
         max: 2.5,
       });
 
-      lightsFolder.addInput(renderer.tonemapRenderer, 'bloomStrength', {
+      lightsFolder.addInput(renderer, 'enableBloom', {
+        label: 'bloom',
+      }).on('change', (ev) => {
+        bloomStrength.hidden = !ev.value;
+      });
+
+      const bloomStrength = lightsFolder.addInput(renderer.tonemapRenderer, 'bloomStrength', {
+        label: 'strength',
         step: 0.01,
         min: 0,
         max: 1,
       });
 
       lightsFolder.addInput(lightState, 'pointLightCount', {
+        label: 'lightCount',
         step: 1,
         min: 0,
         max: pointLightColors.length,
       });
-      lightsFolder.addInput(lightState, 'animateLights');
+      lightsFolder.addInput(lightState, 'animateLights', {
+        label: 'animate',
+      });
 
       const stats = {
         fps: 0,

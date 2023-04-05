@@ -153,6 +153,7 @@ export class DeferredRenderer extends RendererBase {
     depthAttachment;
     textureVisualizer;
     debugView = DebugViewType.none;
+    enableBloom = true;
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
@@ -471,8 +472,7 @@ export class DeferredRenderer extends RendererBase {
         }
         this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
         forwardPass.end();
-        const enableBloom = this.tonemapRenderer.bloomStrength > 0;
-        if (enableBloom) {
+        if (this.enableBloom) {
             this.bloomRenderer.render(encoder);
         }
         if (this.debugView == DebugViewType.none || this.debugView == DebugViewType.all) {
@@ -486,7 +486,7 @@ export class DeferredRenderer extends RendererBase {
                     }],
             });
             // Tone map
-            this.tonemapRenderer.render(outputPass);
+            this.tonemapRenderer.render(outputPass, this.enableBloom);
             // Blur
             // Maybe post-process AA?
             // Profit???
@@ -525,7 +525,7 @@ export class DeferredRenderer extends RendererBase {
                     addPreview(this.normalTexture);
                     addPreview(this.metalRoughTexture);
                     addPreview(this.depthTexture);
-                    if (enableBloom) {
+                    if (this.enableBloom) {
                         addPreview(this.bloomRenderer.intermediateTexture);
                     }
                     addPreview(this.lightTexture);
@@ -547,7 +547,7 @@ export class DeferredRenderer extends RendererBase {
                     this.textureVisualizer.render(debugPass, this.depthTexture);
                     break;
                 case DebugViewType.bloom:
-                    if (enableBloom) {
+                    if (this.enableBloom) {
                         this.textureVisualizer.render(debugPass, this.bloomRenderer.intermediateTexture);
                     }
                     break;
