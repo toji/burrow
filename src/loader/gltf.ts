@@ -4,7 +4,7 @@ import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/we
 import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
-import { DeferredRenderer, Scene, SceneMesh } from '../renderer/deferred-renderer.js';
+import { DeferredRenderer, Scene } from '../renderer/deferred-renderer.js';
 
 const GL = WebGLRenderingContext;
 
@@ -87,6 +87,8 @@ export class GltfLoader {
     }
 
     for (const material of (gltf.materials as any[])) {
+      let unlit = (!!material.extensions?.KHR_materials_unlit);
+
       renderMaterials.push(this.renderer.createMaterial({
         label: material.name,
         baseColorFactor: material.pbrMetallicRoughness?.baseColorFactor,
@@ -101,6 +103,7 @@ export class GltfLoader {
         emissiveTexture: getTexture(material.emissiveTexture),
         transparent: material.alphaMode == 'BLEND',
         alphaCutoff: material.alphaMode == 'MASK' ? (material.alphaCutoff ?? 0.5) : 0,
+        unlit,
       }));
     }
 

@@ -124,7 +124,8 @@ export class RenderMaterialManager {
       materialBindGroup,
       desc.transparent ?? false,
       desc.doubleSided ?? true,
-      (!!desc.alphaCutoff)
+      (!!desc.alphaCutoff),
+      desc.unlit ?? false
     );
   }
 }

@@ -18,6 +18,7 @@ export interface PbrMaterialDescriptor {
   transparent?: boolean;
   doubleSided?: boolean;
   alphaCutoff?: number;
+  unlit?: boolean;
 }
 
 export class RenderMaterial {
@@ -26,11 +27,13 @@ export class RenderMaterial {
     public transparent: boolean,
     public doubleSided: boolean,
     public discard: boolean,
+    public unlit: boolean,
   ) {}
 
   get key(): number {
     return (this.transparent ? 0x01 : 0) +
       (this.doubleSided ? 0x02 : 0) +
-      (this.discard ? 0x04 : 0);
+      (this.discard ? 0x04 : 0) +
+      (this.unlit ? 0x08 : 0);
   }
 }

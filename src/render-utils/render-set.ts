@@ -18,6 +18,7 @@ export type MaterialGeometry = Map<RenderMaterial, InstancedGeometry>;
 export type PipelineMaterials = Map<GPURenderPipeline, MaterialGeometry>;
 
 export interface RenderSet {
+  totalInstanceCount: number;
   pipelineMaterials: PipelineMaterials;
   instanceBindGroup: GPUBindGroup;
 }
@@ -84,12 +85,12 @@ export abstract class RenderSetProvider {
 
   getRenderSet(meshes: SceneMesh[]): RenderSet {
     const renderSet: RenderSet = {
+      totalInstanceCount: 0,
       pipelineMaterials: new Map(),
       instanceBindGroup: this.instanceBindGroup
     };
 
     const instanceList: GeometryInstances[] = [];
-    let totalInstanceCount = 0;
 
     for (const mesh of meshes) {
       if (!this.meshFilter(mesh)) { continue; }
@@ -123,10 +124,10 @@ export abstract class RenderSetProvider {
         instanceList.push(instances);
       }
       instances.transforms.push(transform);
-      totalInstanceCount++;
+      renderSet.totalInstanceCount++;
     }
 
-    const instanceByteSize = totalInstanceCount * Float32Array.BYTES_PER_ELEMENT * 16;
+    const instanceByteSize = renderSet.totalInstanceCount * Float32Array.BYTES_PER_ELEMENT * 16;
 
     // Resize the buffer if needed.
     if (instanceByteSize > this.instanceBuffer.size) {
