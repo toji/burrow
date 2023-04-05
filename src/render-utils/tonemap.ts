@@ -79,7 +79,7 @@ export class TonemapRenderer {
         module,
         entryPoint: 'fragmentMain',
         targets: [{
-          format: navigator.gpu.getPreferredCanvasFormat(),
+          format,
         }],
       },
     });
@@ -102,13 +102,13 @@ export class TonemapRenderer {
     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.#exposure);
   }
 
-  updateInputTexture(textureView: GPUTextureView) {
+  updateInputTexture(texture: GPUTexture) {
     this.bindGroup = this.device.createBindGroup({
       label: 'tone mapping bind group',
       layout: this.bindGroupLayout,
       entries: [{
         binding: 0,
-        resource: textureView,
+        resource: texture.createView(),
       }, {
         binding: 1,
         resource: { buffer: this.uniformBuffer },

@@ -10,6 +10,6 @@ export declare class TonemapRenderer {
     constructor(device: GPUDevice, format: GPUTextureFormat);
     get exposure(): number;
     set exposure(value: number);
-    updateInputTexture(textureView: GPUTextureView): void;
+    updateInputTexture(texture: GPUTexture): void;
     render(renderPass: GPURenderPassEncoder): void;
 }

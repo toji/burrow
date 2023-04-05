@@ -9,6 +9,7 @@ import { RenderMaterial } from '../material/material.js';
 import { SkyboxRenderer } from '../render-utils/skybox.js';
 import { TonemapRenderer } from '../render-utils/tonemap.js';
 import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
+import { BloomRenderer } from '../render-utils/bloom.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -16,6 +17,7 @@ export declare enum DebugViewType {
     normal = "normal",
     metalRough = "metalRough",
     depth = "depth",
+    bloom = "bloom",
     light = "light",
     all = "all"
 }
@@ -70,6 +72,7 @@ export declare class DeferredRenderer extends RendererBase {
     depthAttachment: GPURenderPassDepthStencilAttachment;
     textureVisualizer: TextureVisualizer;
     debugView: DebugViewType;
+    enableBloom: boolean;
     frameBindGroupLayout: GPUBindGroupLayout;
     frameBindGroup: GPUBindGroup;
     cameraBuffer: GPUBuffer;
@@ -79,6 +82,7 @@ export declare class DeferredRenderer extends RendererBase {
     lightSpriteRenderer: LightSpriteRenderer;
     skyboxRenderer: SkyboxRenderer;
     tonemapRenderer: TonemapRenderer;
+    bloomRenderer: BloomRenderer;
     defaultMaterial: RenderMaterial;
     deferredRenderSetProvider: DeferredRenderSetProvider;
     forwardRenderSetProvider: ForwardRenderSetProvider;

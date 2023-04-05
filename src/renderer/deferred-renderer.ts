@@ -10,6 +10,7 @@ import { SkyboxRenderer } from '../render-utils/skybox.js';
 import { TonemapRenderer } from '../render-utils/tonemap.js';
 import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
 import { getForwardShader } from '../shaders/forward.js';
+import { BloomRenderer } from '../render-utils/bloom.js';
 
 export enum DebugViewType {
   none = "none",
@@ -18,6 +19,7 @@ export enum DebugViewType {
   normal = "normal",
   metalRough = "metalRough",
   depth = "depth",
+  bloom = "bloom",
   light = "light",
   all = "all",
 };
@@ -26,9 +28,6 @@ interface Camera {
   viewMatrix: Mat4,
   position: Vec3,
 }
-
-const MAX_INSTANCES = 1024;
-const INSTANCE_SIZE = 64;
 
 // To prevent per-frame allocations.
 const invViewProjection = new Mat4();
@@ -202,6 +201,7 @@ export class DeferredRenderer extends RendererBase {
   textureVisualizer: TextureVisualizer;
 
   debugView: DebugViewType = DebugViewType.none;
+  enableBloom: boolean = true;
 
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;
@@ -215,6 +215,7 @@ export class DeferredRenderer extends RendererBase {
   lightSpriteRenderer: LightSpriteRenderer;
   skyboxRenderer: SkyboxRenderer;
   tonemapRenderer: TonemapRenderer;
+  bloomRenderer: BloomRenderer;
 
   defaultMaterial: RenderMaterial;
 
@@ -283,6 +284,7 @@ export class DeferredRenderer extends RendererBase {
     this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
     this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
     this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
+    this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
 
     this.defaultMaterial = this.createMaterial({
       label: 'Default Material',
@@ -420,7 +422,8 @@ export class DeferredRenderer extends RendererBase {
       }]
     });
 
-    this.tonemapRenderer.updateInputTexture(this.lightAttachments[0].view);
+    this.tonemapRenderer.updateInputTexture(this.lightTexture);
+    this.bloomRenderer.updateInputTexture(this.lightTexture);
   }
 
   lightingPipelines = new Map<number, GPURenderPipeline>();
@@ -576,6 +579,10 @@ export class DeferredRenderer extends RendererBase {
 
     forwardPass.end();
 
+    if (this.enableBloom) {
+      this.bloomRenderer.render(encoder);
+    }
+
     if (this.debugView == DebugViewType.none || this.debugView == DebugViewType.all) {
       const outputPass = encoder.beginRenderPass({
         label: 'output pass',
@@ -637,6 +644,9 @@ export class DeferredRenderer extends RendererBase {
           addPreview(this.normalTexture);
           addPreview(this.metalRoughTexture);
           addPreview(this.depthTexture);
+          if (this.enableBloom) {
+            addPreview(this.bloomRenderer.intermediateTexture);
+          }
           addPreview(this.lightTexture);
 
           break;
@@ -659,6 +669,12 @@ export class DeferredRenderer extends RendererBase {
 
         case DebugViewType.depth:
           this.textureVisualizer.render(debugPass, this.depthTexture);
+          break;
+
+        case DebugViewType.bloom:
+          if (this.enableBloom) {
+            this.textureVisualizer.render(debugPass, this.bloomRenderer.intermediateTexture);
+          }
           break;
 
         case DebugViewType.light:
