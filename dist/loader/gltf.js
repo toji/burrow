@@ -82,6 +82,7 @@ export class GltfLoader {
                 occlusionStrength: material.occlusionTexture?.strength,
                 emissiveFactor: material.emissiveFactor,
                 emissiveTexture: getTexture(material.emissiveTexture),
+                transparent: material.alphaMode == 'BLEND',
             }));
         }
         const meshes = [];

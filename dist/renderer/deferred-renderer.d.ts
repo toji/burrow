@@ -8,6 +8,7 @@ import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
 import { SkyboxRenderer } from '../render-utils/skybox.js';
 import { TonemapRenderer } from '../render-utils/tonemap.js';
+import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -43,8 +44,21 @@ export interface Scene {
     directionalLight?: DirectionalLight;
     pointLights?: PointLight[];
 }
+declare class DeferredRenderSetProvider extends RenderSetProvider {
+    renderer: DeferredRenderer;
+    pipelineLayout: GPUPipelineLayout;
+    constructor(renderer: DeferredRenderer);
+    meshFilter(mesh: SceneMesh): boolean;
+    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline;
+}
+declare class ForwardRenderSetProvider extends RenderSetProvider {
+    renderer: DeferredRenderer;
+    pipelineLayout: GPUPipelineLayout;
+    constructor(renderer: DeferredRenderer);
+    meshFilter(mesh: SceneMesh): boolean;
+    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline;
+}
 export declare class DeferredRenderer extends RendererBase {
-    #private;
     attachmentSize: GPUExtent3DDictStrict;
     rgbaTexture: GPUTexture;
     normalTexture: GPUTexture;
@@ -60,25 +74,23 @@ export declare class DeferredRenderer extends RendererBase {
     frameBindGroup: GPUBindGroup;
     cameraBuffer: GPUBuffer;
     projection: Mat4;
-    instanceBindGroupLayout: GPUBindGroupLayout;
-    instanceBindGroup: GPUBindGroup;
-    instanceBuffer: GPUBuffer;
-    instanceArray: Float32Array;
     gBufferBindGroupLayout: GPUBindGroupLayout;
     gBufferBindGroup: GPUBindGroup;
     lightSpriteRenderer: LightSpriteRenderer;
     skyboxRenderer: SkyboxRenderer;
     tonemapRenderer: TonemapRenderer;
     defaultMaterial: RenderMaterial;
+    deferredRenderSetProvider: DeferredRenderSetProvider;
+    forwardRenderSetProvider: ForwardRenderSetProvider;
     constructor(device: GPUDevice);
     updateFrameBindGroup(): void;
     get environment(): GPUTexture;
     set environment(environmentTexture: GPUTexture);
     resize(width: number, height: number): void;
-    getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline;
     lightingPipelines: Map<number, GPURenderPipeline>;
     getLightingPipeline(): GPURenderPipeline;
     updateCamera(camera: Camera): void;
+    drawRenderSet(renderPass: GPURenderPassEncoder, renderSet: RenderSet): void;
     render(output: GPUTexture, camera: Camera, scene: Scene): void;
 }
 export {};

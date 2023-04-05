@@ -9,6 +9,7 @@ export const surfaceInfoStruct = /* wgsl */ `
     rough: f32,
     f0: vec3f,
     ao: f32,
+    alpha: f32,
   };
 `;
 // Much of the shaders used here were pulled from https://learnopengl.com/PBR/Lighting
@@ -123,6 +124,24 @@ export function PbrFunctions() {
 
       let ambient    = (kD * diffuse + specular) * surface.ao;
       return ambient;
+    }
+
+    fn pointLightAttenuation(worldToLight: vec3f, lightRange: f32) -> f32 {
+      let dist = length(worldToLight);
+      return clamp(1 - pow(dist / lightRange, 4), 0, 1) / pow(dist, 2);
+    }
+
+    fn pbrDirectionalLight(light : DirectionalLight, surface: SurfaceInfo) -> vec3f {
+      return pbrSurfaceColor(normalize(light.direction), surface, light.color, light.intensity, 1);
+    }
+
+    fn pbrPointLight(light : PointLight, surface: SurfaceInfo) -> vec3f {
+      let worldToLight = light.position - surface.worldPos;
+
+      let L = normalize(worldToLight);
+      let attenuation = pointLightAttenuation(worldToLight, light.range);
+
+      return pbrSurfaceColor(L, surface, light.color, light.intensity, attenuation);
     }
   `;
 }
