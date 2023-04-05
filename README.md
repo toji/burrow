@@ -5,8 +5,9 @@ A toy WebGPU deferred renderer built on my WIP hoard-gpu asset loading library.
 ## Features
 
  - Deferred rendering with WebGPU!
+    - Bloom: Not great, but there!
     - Antialising support: No
-    - Transparency support: Also no
+    - Transparency support: ~~Also no~~ Now yes!
     - Anything approaching a useful abstraction layer: Nope!
  - glTF loading
     - Animations: No

@@ -26,16 +26,16 @@ export class TextureVisualizer {
 
         struct VertexOut {
           @builtin(position) position : vec4f,
-          @location(0) texCoord : vec2f,
+          @location(0) texcoord : vec2f,
         };
 
         @vertex
         fn vertexMain(@builtin(vertex_index) vertexIndex : u32) -> VertexOut {
           let p = pos[vertexIndex];
-          var output : VertexOut;
-          output.position = vec4f(p, 0.0, 1.0);
-          output.texCoord = (vec2(p.x, -p.y) + 1) * 0.5;
-          return output;
+          var out : VertexOut;
+          out.position = vec4f(p, 0.0, 1.0);
+          out.texcoord = (vec2(p.x, -p.y) + 1) * 0.5;
+          return out;
         }
 
         struct Uniforms {

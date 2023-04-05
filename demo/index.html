@@ -40,21 +40,42 @@
       import { CubeGeometryDesc } from './cube.js';
       import { Mat4 } from '../third-party/gl-matrix/dist/src/index.js';
 
-      //const GltfRootDir = '../../glTF-Sample-Models/2.0';
-      const GltfRootDir = './media/models';
-      const GltfModels = {
-        //antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
-        boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
-        //corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
-        damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
-        //flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
-        //lantern: `${GltfRootDir}/Lantern/glTF/Lantern.gltf`,
-        //shoe: `${GltfRootDir}/MaterialsVariantsShoe/glTF/MaterialsVariantsShoe.gltf`,
-        metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
-        scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
-        //suzanne: `${GltfRootDir}/Suzanne/glTF/Suzanne.gltf`,
-        water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
-      };
+      const LOCAL_MODELS = true;
+      let GltfModels;
+      if (LOCAL_MODELS) {
+        const GltfRootDir = './media/models';
+        GltfModels = {
+          //antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
+          boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+          //corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
+          damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
+          //flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
+          //lantern: `${GltfRootDir}/Lantern/glTF/Lantern.gltf`,
+          //shoe: `${GltfRootDir}/MaterialsVariantsShoe/glTF/MaterialsVariantsShoe.gltf`,
+          metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
+          scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
+          //suzanne: `${GltfRootDir}/Suzanne/glTF/Suzanne.gltf`,
+          water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
+        };
+      } else {
+        const GltfRootDir = '../../glTF-Sample-Models/2.0';
+        GltfModels = {
+          antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
+          boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+          corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
+          damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
+          flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
+          lantern: `${GltfRootDir}/Lantern/glTF/Lantern.gltf`,
+          shoe: `${GltfRootDir}/MaterialsVariantsShoe/glTF/MaterialsVariantsShoe.gltf`,
+          metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
+          mosquito_in_amber: `${GltfRootDir}/MosquitoInAmber/glTF-Binary/MosquitoInAmber.glb`,
+          scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
+          suzanne: `${GltfRootDir}/Suzanne/glTF/Suzanne.gltf`,
+          toy_car: `${GltfRootDir}/ToyCar/glTF-Binary/ToyCar.glb`,
+          unlit_test: `${GltfRootDir}/UnlitTest/glTF/UnlitTest.gltf`,
+          water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
+        };
+      }
 
       let modelPath = GltfModels.scifi_helmet;
 
@@ -146,6 +167,8 @@
       }).on('change', (ev) => {
         loadEnv(ev.value);
       });
+
+      debugPane.addInput(renderer, 'enableBloom');
 
       debugPane.addBlade({
         label: 'debugView',
