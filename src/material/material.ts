@@ -28,9 +28,8 @@ export class RenderMaterial {
     public discard: boolean,
   ) {}
 
-  get key(): string {
-    return
-      (this.transparent ? 0x01 : 0) +
+  get key(): number {
+    return (this.transparent ? 0x01 : 0) +
       (this.doubleSided ? 0x02 : 0) +
       (this.discard ? 0x04 : 0);
   }

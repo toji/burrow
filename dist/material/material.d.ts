@@ -23,5 +23,5 @@ export declare class RenderMaterial {
     doubleSided: boolean;
     discard: boolean;
     constructor(bindGroup: GPUBindGroup, transparent: boolean, doubleSided: boolean, discard: boolean);
-    get key(): string;
+    get key(): number;
 }

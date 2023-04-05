@@ -24,9 +24,16 @@ export function getGBufferShader(layout, material) {
       var out: FragmentOutput;
 
       let baseColor = material.baseColorFactor * textureSample(baseColorTexture, pbrSampler, input.texcoord);
+
+#if ${material.discard}
+      if (baseColor.a < material.alphaCutoff) {
+        discard;
+      }
+#endif
+
       let occlusion = material.occlusionStrength * textureSample(occlusionTexture, pbrSampler, input.texcoord).r;
 
-      out.albedo = vec4f(input.color, occlusion) * baseColor;
+      out.albedo = vec4f(input.color * baseColor.rgb, occlusion);
       out.metalRough = material.metallicRoughnessFactor * textureSample(metallicRoughnessTexture, pbrSampler, input.texcoord).bg;
 
 #if ${locationsUsed.has(AttributeLocation.tangent)}
@@ -35,12 +42,6 @@ export function getGBufferShader(layout, material) {
       let normal = tbn * (2 * N - 1);
 #else
       let normal = input.normal;
-#endif
-
-#if ${material.discard}
-      if (baseColor.a < material.alphaCutoff) {
-        discard;
-      }
 #endif
 
       out.normal = vec4(normalize(normal) * 0.5 + 0.5, 1);

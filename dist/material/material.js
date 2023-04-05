@@ -10,8 +10,7 @@ export class RenderMaterial {
         this.discard = discard;
     }
     get key() {
-        return;
-        (this.transparent ? 0x01 : 0) +
+        return (this.transparent ? 0x01 : 0) +
             (this.doubleSided ? 0x02 : 0) +
             (this.discard ? 0x04 : 0);
     }
