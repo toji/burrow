@@ -8,6 +8,8 @@ import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
 import { SkyboxRenderer } from '../render-utils/skybox.js';
 import { TonemapRenderer } from '../render-utils/tonemap.js';
+import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
+import { getForwardShader } from '../shaders/forward.js';
 
 export enum DebugViewType {
   none = "none",
@@ -57,10 +59,131 @@ export interface Scene {
   pointLights?: PointLight[];
 }
 
-interface GeometryInstances {
-  firstInstance: number,
-  instanceCount: number,
-  transforms: Mat4[],
+class DeferredRenderSetProvider extends RenderSetProvider {
+  pipelineLayout: GPUPipelineLayout;
+
+  constructor(public renderer: DeferredRenderer) {
+    super(renderer.device, renderer.defaultMaterial);
+
+    this.pipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts: [
+      renderer.frameBindGroupLayout,
+      this.instanceBindGroupLayout,
+      renderer.renderMaterialManager.materialBindGroupLayout,
+    ]})
+  }
+
+  meshFilter(mesh: SceneMesh): boolean {
+    return mesh.material?.transparent !== true;
+  }
+
+  createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline {
+    // Things that will come from the material
+    // (This is for opaque surfaces only!)
+    const cullMode: GPUCullMode = material.doubleSided ? 'none' : 'back';
+
+    const module = this.device.createShaderModule({
+      label: `deferred shader module (key ${key})`,
+      code: getGBufferShader(layout, material),
+    });
+
+    return this.device.createRenderPipeline({
+      label: `deferred render pipeline (key ${key})`,
+      layout: this.pipelineLayout,
+      vertex: {
+        module,
+        entryPoint: 'vertexMain',
+        buffers: layout.buffers,
+      },
+      primitive: {
+        topology: layout.topology,
+        cullMode,
+        stripIndexFormat: layout.stripIndexFormat
+      },
+      depthStencil: {
+        format: 'depth16unorm',
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+      fragment: {
+        module,
+        entryPoint: 'fragmentMain',
+        targets: [{
+          format: 'rgba8unorm',
+        }, {
+          format: 'rgba8unorm',
+        }, {
+          format: 'rg8unorm',
+        }, {
+          format: 'rgb10a2unorm',
+        }],
+      },
+    });
+  }
+}
+
+class ForwardRenderSetProvider extends RenderSetProvider {
+  pipelineLayout: GPUPipelineLayout;
+
+  constructor(public renderer: DeferredRenderer) {
+    super(renderer.device, renderer.defaultMaterial);
+
+    this.pipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts: [
+      renderer.frameBindGroupLayout,
+      this.instanceBindGroupLayout,
+      renderer.renderMaterialManager.materialBindGroupLayout,
+    ]})
+  }
+
+  meshFilter(mesh: SceneMesh): boolean {
+    return mesh.material?.transparent === true;
+  }
+
+  createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline {
+    // Things that will come from the material
+    const cullMode: GPUCullMode = material.doubleSided ? 'none' : 'back';
+
+    const module = this.device.createShaderModule({
+      label: `forward shader module (key ${key})`,
+      code: getForwardShader(layout, material),
+    });
+
+    return this.device.createRenderPipeline({
+      label: `forward render pipeline (key ${key})`,
+      layout: this.pipelineLayout,
+      vertex: {
+        module,
+        entryPoint: 'vertexMain',
+        buffers: layout.buffers,
+      },
+      primitive: {
+        topology: layout.topology,
+        cullMode,
+        stripIndexFormat: layout.stripIndexFormat
+      },
+      depthStencil: {
+        format: 'depth16unorm',
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+      fragment: {
+        module,
+        entryPoint: 'fragmentMain',
+        targets: [{
+          format: 'rgb10a2unorm',
+          blend: {
+            color: {
+              srcFactor: 'src-alpha',
+              dstFactor: 'one-minus-src-alpha',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'zero',
+            }
+          }
+        }],
+      },
+    });
+  }
 }
 
 export class DeferredRenderer extends RendererBase {
@@ -86,11 +209,6 @@ export class DeferredRenderer extends RendererBase {
 
   projection: Mat4;
 
-  instanceBindGroupLayout: GPUBindGroupLayout;
-  instanceBindGroup: GPUBindGroup;
-  instanceBuffer: GPUBuffer;
-  instanceArray: Float32Array;
-
   gBufferBindGroupLayout: GPUBindGroupLayout;
   gBufferBindGroup: GPUBindGroup;
 
@@ -99,6 +217,9 @@ export class DeferredRenderer extends RendererBase {
   tonemapRenderer: TonemapRenderer;
 
   defaultMaterial: RenderMaterial;
+
+  deferredRenderSetProvider: DeferredRenderSetProvider;
+  forwardRenderSetProvider: ForwardRenderSetProvider;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -110,13 +231,6 @@ export class DeferredRenderer extends RendererBase {
       label: 'camera uniform buffer',
       size: 256,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-    });
-
-    this.instanceArray = new Float32Array(MAX_INSTANCES * INSTANCE_SIZE / Float32Array.BYTES_PER_ELEMENT);
-    this.instanceBuffer = device.createBuffer({
-      label: 'instance transform storage buffer',
-      size: MAX_INSTANCES * INSTANCE_SIZE,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
     this.frameBindGroupLayout = device.createBindGroupLayout({
@@ -141,24 +255,6 @@ export class DeferredRenderer extends RendererBase {
     });
 
     this.updateFrameBindGroup();
-
-    this.instanceBindGroupLayout = device.createBindGroupLayout({
-      label: 'instance bind group layout',
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'read-only-storage' }
-      }]
-    });
-
-    this.instanceBindGroup = device.createBindGroup({
-      label: 'instance bind group',
-      layout: this.instanceBindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.instanceBuffer }
-      }]
-    });
 
     this.gBufferBindGroupLayout = device.createBindGroupLayout({
       label: 'gBuffer bind group layout',
@@ -192,6 +288,9 @@ export class DeferredRenderer extends RendererBase {
       label: 'Default Material',
       baseColorFactor: [0, 1, 0, 1],
     });
+
+    this.deferredRenderSetProvider = new DeferredRenderSetProvider(this);
+    this.forwardRenderSetProvider = new ForwardRenderSetProvider(this);
   }
 
   updateFrameBindGroup() {
@@ -324,63 +423,6 @@ export class DeferredRenderer extends RendererBase {
     this.tonemapRenderer.updateInputTexture(this.lightAttachments[0].view);
   }
 
-  #deferredPipelineCache: Map<string, GPURenderPipeline> = new Map();
-  getDeferredPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline {
-    let pipelineKey = `${layout.id};${material.key}`;
-
-    let pipeline = this.#deferredPipelineCache.get(pipelineKey);
-    if (pipeline) { return pipeline; }
-
-    // Things that will come from the material
-    // (This is for opaque surfaces only!)
-    const cullMode: GPUCullMode = material.doubleSided ? 'none' : 'back';
-
-    const module = this.device.createShaderModule({
-      label: `deferred shader module (key ${pipelineKey})`,
-      code: getGBufferShader(layout, material),
-    });
-
-    pipeline = this.device.createRenderPipeline({
-      label: `deferred render pipeline (key ${pipelineKey})`,
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [
-        this.frameBindGroupLayout,
-        this.instanceBindGroupLayout,
-        this.renderMaterialManager.materialBindGroupLayout,
-      ] }),
-      vertex: {
-        module,
-        entryPoint: 'vertexMain',
-        buffers: layout.buffers,
-      },
-      primitive: {
-        topology: layout.topology,
-        cullMode,
-        stripIndexFormat: layout.stripIndexFormat
-      },
-      depthStencil: {
-        format: 'depth16unorm',
-        depthWriteEnabled: true,
-        depthCompare: 'less',
-      },
-      fragment: {
-        module,
-        entryPoint: 'fragmentMain',
-        targets: [{
-          format: 'rgba8unorm',
-        }, {
-          format: 'rgba8unorm',
-        }, {
-          format: 'rg8unorm',
-        }, {
-          format: 'rgb10a2unorm',
-        }],
-      },
-    });
-
-    this.#deferredPipelineCache.set(pipelineKey, pipeline);
-    return pipeline;
-  }
-
   lightingPipelines = new Map<number, GPURenderPipeline>();
   getLightingPipeline(): GPURenderPipeline {
     const key = (this.environment ? 0x01 : 0) |
@@ -443,58 +485,42 @@ export class DeferredRenderer extends RendererBase {
     this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
   }
 
+  drawRenderSet(renderPass: GPURenderPassEncoder, renderSet: RenderSet) {
+    renderPass.setBindGroup(1, renderSet.instanceBindGroup);
+
+    for (const [pipeline, materialGeometries] of renderSet.pipelineMaterials.entries()) {
+      renderPass.setPipeline(pipeline);
+
+      for (const [material, geometryInstances] of materialGeometries.entries()) {
+        renderPass.setBindGroup(2, material.bindGroup);
+
+        for (const [geometry, instances] of geometryInstances.entries()) {
+          // Bind the geometry
+          for (const buffer of geometry.vertexBuffers) {
+            renderPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
+          }
+
+          if (geometry.indexBuffer) {
+            renderPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat, geometry.indexBuffer.offset);
+          }
+
+          if (geometry.indexBuffer) {
+            renderPass.drawIndexed(geometry.drawCount, instances.instanceCount, 0, 0, instances.firstInstance);
+          } else {
+            renderPass.draw(geometry.drawCount, instances.instanceCount, 0, instances.firstInstance);
+          }
+        }
+      }
+    }
+  }
+
   render(output: GPUTexture, camera: Camera, scene: Scene) {
     this.updateCamera(camera);
     this.renderLightManager.updateLights(scene);
 
     // Compile renderable list out of scene meshes.
-    const pipelineMaterials = new Map<GPURenderPipeline, Map<RenderMaterial, Map<RenderGeometry, GeometryInstances>>>();
-
-    const instanceList: GeometryInstances[] = [];
-
-    for (const mesh of scene.meshes) {
-      const transform = mesh.transform;
-      const material = mesh.material ?? this.defaultMaterial;
-      const geometry = mesh.geometry;
-
-      const pipeline = this.getDeferredPipeline(geometry.layout, material);
-
-      let materialGeometries = pipelineMaterials.get(pipeline);
-      if (!materialGeometries) {
-        materialGeometries = new Map();
-        pipelineMaterials.set(pipeline, materialGeometries);
-      }
-
-      let geometryInstances = materialGeometries.get(material);
-      if (!geometryInstances) {
-        geometryInstances = new Map();
-        materialGeometries.set(material, geometryInstances);
-      }
-
-      let instances = geometryInstances.get(geometry);
-      if (!instances) {
-        instances = {
-          firstInstance: -1,
-          instanceCount: -1,
-          transforms: []
-        };
-        geometryInstances.set(geometry, instances);
-        instanceList.push(instances);
-      }
-      instances.transforms.push(transform);
-    }
-
-    // Update the instance buffer
-    let instanceOffset = 0;
-    for (const instances of instanceList) {
-      instances.firstInstance = instanceOffset;
-      instances.instanceCount = instances.transforms.length;
-      for (const transform of instances.transforms) {
-        this.instanceArray.set(transform, instanceOffset * 16);
-        instanceOffset++;
-      }
-    }
-    this.device.queue.writeBuffer(this.instanceBuffer, 0, this.instanceArray);
+    const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(scene.meshes);
+    const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(scene.meshes);
 
     const encoder = this.device.createCommandEncoder();
 
@@ -506,32 +532,7 @@ export class DeferredRenderer extends RendererBase {
 
     // Draw stuff
     gBufferPass.setBindGroup(0, this.frameBindGroup);
-    gBufferPass.setBindGroup(1, this.instanceBindGroup);
-
-    for (const [pipeline, materialGeometries] of pipelineMaterials.entries()) {
-      gBufferPass.setPipeline(pipeline);
-
-      for (const [material, geometryInstances] of materialGeometries.entries()) {
-        gBufferPass.setBindGroup(2, material.bindGroup);
-
-        for (const [geometry, instances] of geometryInstances.entries()) {
-          // Bind the geometry
-          for (const buffer of geometry.vertexBuffers) {
-            gBufferPass.setVertexBuffer(buffer.slot, buffer.buffer, buffer.offset);
-          }
-
-          if (geometry.indexBuffer) {
-            gBufferPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat, geometry.indexBuffer.offset);
-          }
-
-          if (geometry.indexBuffer) {
-            gBufferPass.drawIndexed(geometry.drawCount, instances.instanceCount, 0, 0, instances.firstInstance);
-          } else {
-            gBufferPass.draw(geometry.drawCount, instances.instanceCount, 0, instances.firstInstance);
-          }
-        }
-      }
-    }
+    this.drawRenderSet(gBufferPass, deferredRenderSet);
 
     gBufferPass.end();
 
@@ -564,6 +565,8 @@ export class DeferredRenderer extends RendererBase {
 
     // Draw forward stuff?
     forwardPass.setBindGroup(0, this.frameBindGroup);
+
+    this.drawRenderSet(forwardPass, forwardRenderSet);
 
     if (this.environment) {
       this.skyboxRenderer.render(forwardPass);
