@@ -201,7 +201,7 @@ export class DeferredRenderer extends RendererBase {
   textureVisualizer: TextureVisualizer;
 
   debugView: DebugViewType = DebugViewType.none;
-  enableBloom: boolean = true;
+  enableBloom: boolean = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
 
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;

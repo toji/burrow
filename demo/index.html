@@ -39,6 +39,8 @@
       import { OrbitCamera } from '../dist/orbit-camera.js';
       import { CubeGeometryDesc } from './cube.js';
       import { Mat4 } from '../third-party/gl-matrix/dist/src/index.js';
+      import { SceneObject } from '../dist/scene/node.js';
+      import { Mesh } from '../dist/scene/mesh.js';
 
       const LOCAL_MODELS = false;
       let GltfModels;
@@ -54,8 +56,11 @@
       } else {
         const GltfRootDir = '../../glTF-Sample-Models/2.0';
         GltfModels = {
+          animated_cube: `${GltfRootDir}/AnimatedCube/glTF/AnimatedCube.gltf`,
           antique_camera: `${GltfRootDir}/AntiqueCamera/glTF/AntiqueCamera.gltf`,
           boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+          box_animated: `${GltfRootDir}/BoxAnimated/glTF/BoxAnimated.gltf`,
+          buggy: `${GltfRootDir}/Buggy/glTF/Buggy.gltf`,
           corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
           damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
           emissive_strength: `${GltfRootDir}/EmissiveStrengthTest/glTF/EmissiveStrengthTest.gltf`,
@@ -64,6 +69,7 @@
           shoe: `${GltfRootDir}/MaterialsVariantsShoe/glTF/MaterialsVariantsShoe.gltf`,
           metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
           mosquito_in_amber: `${GltfRootDir}/MosquitoInAmber/glTF-Binary/MosquitoInAmber.glb`,
+          rigged_figure: `${GltfRootDir}/RiggedFigure/glTF/RiggedFigure.gltf`,
           scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
           sponza: `${GltfRootDir}/Sponza/glTF/Sponza.gltf`,
           suzanne: `${GltfRootDir}/Suzanne/glTF/Suzanne.gltf`,
@@ -110,17 +116,20 @@
 
       const cubeGeometry = renderer.createGeometry(CubeGeometryDesc);
 
-      let scene = {
-        meshes: [{
-          transform: new Mat4(),
-          geometry: cubeGeometry,
-        }],
-      };
+      let scene = new Mesh({
+        geometry: { geometry: cubeGeometry }
+      });
+
+      let animations = [];
 
       function loadModel(path) {
         modelPath = path;
-        gltfLoader.loadFromUrl(path).then((gltfScene) => {
-          scene = gltfScene;
+        gltfLoader.loadFromUrl(path).then((result) => {
+          scene = result.scene;
+          animations = result.animations;
+          if (result.animations.length) {
+            console.log('Found animations:', result.animations);
+          }
         });
       }
       loadModel(modelPath);
@@ -235,6 +244,7 @@
         step: 0.01,
         min: 0,
         max: 1,
+        hidden: !renderer.enableBloom
       });
 
       lightsFolder.addInput(lightState, 'pointLightCount', {
@@ -285,12 +295,21 @@
         const frameStart = performance.now();
         frameCount++;
 
+        if (animations.length) {
+          const animation = animations[0];
+          animation.applyAtTime(timestamp, scene.animationTarget);
+        }
+
         updatePointLights(timestamp);
-        scene.pointLights = lightState.pointLights;
+
+        const renderScene = {
+          meshes: scene.getRenderables(), // TODO: This navigates the tree every frame == slow.
+          pointLights: lightState.pointLights
+        };
 
         const outputTexture = context.getCurrentTexture();
 
-        renderer.render(outputTexture, camera, scene);
+        renderer.render(outputTexture, camera, renderScene);
 
         const frameEnd = performance.now();
         stats.frameMs = frameEnd - frameStart;
