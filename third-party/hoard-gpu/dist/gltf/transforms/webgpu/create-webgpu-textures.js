@@ -7,8 +7,7 @@ export class CreateWebGpuTextures extends WebGpuGltfTransform {
             this.setGpuExtras(image, { texture });
             return texture;
         };
-        for (const imageIndex in gltf.images) {
-            const image = gltf.images[imageIndex];
+        for (const [imageIndex, image] of gltf.images.entries()) {
             this.setGpuExtras(image, { promise: createTextureFromImage(imageIndex) });
         }
         return Promise.all(gltf.images.map(image => image.extras?.gpu?.promise));

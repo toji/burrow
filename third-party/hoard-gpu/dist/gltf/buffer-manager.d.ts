@@ -1,26 +1,21 @@
 import { CacheHelper } from '../common/cache-helper.js';
+import { GlTf, BufferView, GlTfId } from './gltf.js';
 export declare class BufferManager {
     #private;
-    constructor(gltf: any, baseUrl: string, glbBinaryChunk?: ArrayBuffer);
-    createBufferViewFromArrayBuffer(bufferPromise: Promise<ArrayBuffer>, bufferView: GltfBufferView): number;
-    createEmptyBufferView(bufferView: any): number;
+    constructor(gltf: GlTf, baseUrl: string, glbBinaryChunk?: ArrayBuffer);
+    createBufferViewFromArrayBuffer(bufferPromise: Promise<ArrayBuffer>, bufferView: BufferView): number;
+    createEmptyBufferView(bufferView: Partial<BufferView>): number;
     removeBufferView(index: number): void;
-    getBufferView(index: number): BufferView;
-    get bufferViews(): Iterable<BufferView>;
+    getBufferView(index: number): ManagedBufferView;
+    get bufferViews(): ManagedBufferView[];
     updateCache(gltf: any, cache: CacheHelper): Promise<void>;
 }
-interface GltfBufferView {
-    buffer?: number;
-    byteOffset?: number;
-    byteLength?: number;
-    byteStride?: number;
-    target?: number;
-    name?: string;
-    extension?: any;
-    extras?: any;
+export interface ResolvedBufferView extends BufferView {
+    byteArray: Uint8Array;
 }
-declare class BufferView implements GltfBufferView {
+export declare class ManagedBufferView implements BufferView {
     #private;
+    buffer: GlTfId;
     byteOffset: number;
     byteLength: number;
     byteStride: number;
@@ -28,9 +23,9 @@ declare class BufferView implements GltfBufferView {
     name: string;
     extension: any;
     extras: any;
-    constructor(bufferView?: GltfBufferView);
+    constructor(bufferView: Partial<BufferView>);
     resolveWithArrayBuffer(arrayBuffer: ArrayBuffer): void;
     asByteArray(): Promise<Uint8Array>;
-    toJson(overrideByteOffset?: number): GltfBufferView;
+    toJson(overrideByteOffset?: number): BufferView;
+    toResolvedBufferView(): Promise<ResolvedBufferView>;
 }
-export {};

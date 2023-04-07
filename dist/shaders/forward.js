@@ -5,6 +5,27 @@ import { getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.
 import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 export function getForwardShader(layout, material) {
     const locationsUsed = layout.locationsUsed;
+    if (material.unlit) {
+        return wgsl `
+      ${getCommonVertexShader(layout)}
+
+      ${pbrMaterialInputs(/*@group*/ 2)}
+
+      @fragment
+      fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+        let baseColor = material.baseColorFactor * textureSample(baseColorTexture, pbrSampler, input.texcoord);
+        let color = input.color * baseColor.rgb;
+
+#if ${material.discard}
+        if (baseColor.a < material.alphaCutoff) {
+          discard;
+        }
+#endif
+
+        return vec4f(color, baseColor.a);
+      }
+    `;
+    }
     return wgsl `
     ${getCommonVertexShader(layout)}
 

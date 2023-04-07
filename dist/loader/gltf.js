@@ -1,6 +1,9 @@
-import { Mat4 } from '../../third-party/gl-matrix/dist/src/mat4.js';
+import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js';
 import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js';
+import { SceneObject, MatrixTransform, Transform } from '../scene/node.js';
+import { Mesh } from '../scene/mesh.js';
+import { Animation, AnimationChannel, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';
 const GL = WebGLRenderingContext;
 function gpuFormatForAccessor(accessor) {
     const norm = accessor.normalized ? 'norm' : 'int';
@@ -29,6 +32,17 @@ function gpuPrimitiveTopologyForMode(mode) {
         case GL.LINES: return 'line-list';
         case GL.LINE_STRIP: return 'line-strip';
         case GL.POINTS: return 'point-list';
+    }
+}
+function getComponentTypeArrayConstructor(componentType) {
+    switch (componentType) {
+        case GL.BYTE: return Int8Array;
+        case GL.UNSIGNED_BYTE: return Uint8Array;
+        case GL.SHORT: return Int16Array;
+        case GL.UNSIGNED_SHORT: return Uint16Array;
+        case GL.UNSIGNED_INT: return Uint32Array;
+        case GL.FLOAT: return Float32Array;
+        default: throw new Error(`Unexpected componentType: ${componentType}`);
     }
 }
 const ATTRIB_MAPPING = {
@@ -69,7 +83,14 @@ export class GltfLoader {
             const image = gltf.images[texture.source];
             return image.extras?.gpu?.texture;
         }
+        //-----------
+        // Materials
+        //-----------
         for (const material of gltf.materials) {
+            let unlit = (!!material.extensions?.KHR_materials_unlit);
+            const emissiveStrength = material.extensions?.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
+            const emissiveFactor = new Vec3(material.emissiveFactor || 1);
+            emissiveFactor.scale(emissiveStrength);
             renderMaterials.push(this.renderer.createMaterial({
                 label: material.name,
                 baseColorFactor: material.pbrMetallicRoughness?.baseColorFactor,
@@ -80,12 +101,16 @@ export class GltfLoader {
                 normalTexture: getTexture(material.normalTexture),
                 occlusionTexture: getTexture(material.occlusionTexture),
                 occlusionStrength: material.occlusionTexture?.strength,
-                emissiveFactor: material.emissiveFactor,
+                emissiveFactor,
                 emissiveTexture: getTexture(material.emissiveTexture),
                 transparent: material.alphaMode == 'BLEND',
                 alphaCutoff: material.alphaMode == 'MASK' ? (material.alphaCutoff ?? 0.5) : 0,
+                unlit,
             }));
         }
+        //-----------
+        // Meshes
+        //-----------
         const meshes = [];
         for (let i = 0; i < gltf.meshes.length; ++i) {
             const mesh = gltf.meshes[i];
@@ -129,11 +154,101 @@ export class GltfLoader {
             }
             meshes.push(primitives);
         }
-        const renderScene = {
-            meshes: []
-        };
+        //------------
+        // Animations
+        //------------
+        function getAccessorTypedArray(accessor) {
+            const bufferView = gltf.bufferViews[accessor.bufferView];
+            const byteArray = bufferView.byteArray;
+            // TODO: Does this need to take into account non-tightly packed buffers?
+            const typedArrayOffset = bufferView.byteOffset + accessor.byteOffset;
+            const elementCount = accessor.extras.componentCount * accessor.count;
+            const arrayType = getComponentTypeArrayConstructor(accessor.componentType);
+            return new arrayType(byteArray.buffer, typedArrayOffset, elementCount);
+        }
+        const animations = [];
+        if (gltf.animations) {
+            for (const animation of gltf.animations) {
+                const channels = [];
+                for (const channel of animation.channels) {
+                    const channelSampler = animation.samplers[channel.sampler];
+                    let samplerType;
+                    switch (channelSampler.interpolation) {
+                        case 'STEP':
+                            samplerType = StepAnimationSampler;
+                            break;
+                        case 'CUBICSPLINE ': // TODO
+                        case 'LINEAR': {
+                            if (channel.target.path == 'rotation') {
+                                samplerType = SphericalLinearAnimationSampler;
+                                break;
+                            }
+                            else {
+                                samplerType = LinearAnimationSampler;
+                                break;
+                            }
+                        }
+                        default: throw new Error(`Unknown channel interpolation type: ${channelSampler.interpolation}`);
+                    }
+                    const inputAccessor = gltf.accessors[channelSampler.input];
+                    const outputAccessor = gltf.accessors[channelSampler.output];
+                    const sampler = new samplerType(getAccessorTypedArray(inputAccessor), getAccessorTypedArray(outputAccessor), outputAccessor.extras.componentCount);
+                    channels.push(new AnimationChannel(channel.target.node, channel.target.path, sampler));
+                }
+                animations.push(new Animation(animation.name || `Animation_${animations.length}`, channels));
+            }
+        }
+        //-----------
+        // Nodes
+        //-----------
+        const sceneNodes = [];
+        // Two passes over the nodes. First to construct the node objects.
+        for (const node of gltf.nodes) {
+            let transform;
+            if (node.matrix) {
+                transform = new MatrixTransform(node.matrix);
+            }
+            else if (node.translation || node.rotation || node.scale) {
+                transform = new Transform({
+                    translation: node.translation,
+                    rotation: node.rotation,
+                    scale: node.scale
+                });
+            }
+            if (node.mesh !== undefined) {
+                const meshPrimitives = meshes[node.mesh];
+                /*for (const primitive of meshPrimitives) {
+                  const transform = new Mat4(sceneTransform);
+                  transform.multiply(node.extras.worldMatrix);
+                  renderScene.meshes.push({
+                    ...primitive,
+                    transform
+                  });
+                }*/
+                sceneNodes.push(new Mesh({
+                    transform,
+                    geometry: meshes[node.mesh]
+                }));
+            }
+            else {
+                sceneNodes.push(new SceneObject({
+                    transform
+                }));
+            }
+        }
+        // Second pass over the nodes to build the tree.
+        for (const [index, node] of gltf.nodes.entries()) {
+            if (!node.children) {
+                continue;
+            }
+            const sceneNode = sceneNodes[index];
+            for (const child of node.children) {
+                sceneNode.addChild(sceneNodes[child]);
+            }
+        }
         // @ts-ignore
-        const sceneAabb = gltf.scenes[gltf.scene].extras.aabb;
+        const scene = gltf.scenes[gltf.scene];
+        const sceneAabb = scene.extras.aabb;
         // HACK!
         const sceneTransform = new Mat4();
         if (url.includes('Sponza')) {
@@ -143,20 +258,18 @@ export class GltfLoader {
             sceneTransform.scale([2 / sceneAabb.radius, 2 / sceneAabb.radius, 2 / sceneAabb.radius]);
             sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1], -sceneAabb.center[2]]);
         }
-        for (const node of gltf.nodes) {
-            if (node.mesh !== undefined) {
-                const meshPrimitives = meshes[node.mesh];
-                for (const primitive of meshPrimitives) {
-                    const transform = new Mat4(sceneTransform);
-                    transform.multiply(node.extras.worldMatrix);
-                    renderScene.meshes.push({
-                        ...primitive,
-                        transform
-                    });
-                }
-            }
+        const sceneRoot = new SceneObject({
+            transform: new MatrixTransform(sceneTransform)
+        });
+        for (const nodeIndex of scene.nodes) {
+            sceneRoot.addChild(sceneNodes[nodeIndex]);
         }
-        return renderScene;
+        const animationTarget = new AnimationTarget(sceneNodes);
+        sceneRoot.animationTarget = animationTarget;
+        return {
+            scene: sceneRoot,
+            animations
+        };
     }
 }
 //# sourceMappingURL=gltf.js.map

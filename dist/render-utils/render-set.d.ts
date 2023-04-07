@@ -13,6 +13,7 @@ export type InstancedGeometry = Map<RenderGeometry, GeometryInstances>;
 export type MaterialGeometry = Map<RenderMaterial, InstancedGeometry>;
 export type PipelineMaterials = Map<GPURenderPipeline, MaterialGeometry>;
 export interface RenderSet {
+    totalInstanceCount: number;
     pipelineMaterials: PipelineMaterials;
     instanceBindGroup: GPUBindGroup;
 }

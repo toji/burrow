@@ -15,7 +15,7 @@ export const bloomShader = /* wgsl */ `
 
   @fragment
   fn downsampleMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = 1.0 / vec2f(textureDimensions(sourceTexture));
+    let texelSize = (1.0 / vec2f(textureDimensions(sourceTexture)));
     let texcoord = pos.xy * texelSize * 2;
     let x = texelSize.x;
     let y = texelSize.y;
@@ -144,7 +144,6 @@ export class BloomRenderer {
             label: 'bloom sampler',
             minFilter: 'linear',
             magFilter: 'linear',
-            mipmapFilter: 'linear',
         });
     }
     updateInputTexture(texture) {

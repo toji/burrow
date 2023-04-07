@@ -37,7 +37,7 @@ class DeferredRenderSetProvider extends RenderSetProvider {
             ] });
     }
     meshFilter(mesh) {
-        return mesh.material?.transparent !== true;
+        return mesh.material?.transparent !== true && mesh.material?.unlit !== true;
     }
     createPipeline(layout, material, key) {
         // Things that will come from the material
@@ -94,7 +94,7 @@ class ForwardRenderSetProvider extends RenderSetProvider {
             ] });
     }
     meshFilter(mesh) {
-        return mesh.material?.transparent === true;
+        return mesh.material?.transparent === true || mesh.material?.unlit === true;
     }
     createPipeline(layout, material, key) {
         // Things that will come from the material
@@ -153,7 +153,7 @@ export class DeferredRenderer extends RendererBase {
     depthAttachment;
     textureVisualizer;
     debugView = DebugViewType.none;
-    enableBloom = true;
+    enableBloom = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
@@ -402,6 +402,9 @@ export class DeferredRenderer extends RendererBase {
         this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
     }
     drawRenderSet(renderPass, renderSet) {
+        if (!renderSet.totalInstanceCount) {
+            return;
+        } // Nothing to render
         renderPass.setBindGroup(1, renderSet.instanceBindGroup);
         for (const [pipeline, materialGeometries] of renderSet.pipelineMaterials.entries()) {
             renderPass.setPipeline(pipeline);

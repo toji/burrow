@@ -1,6 +1,9 @@
-export class ResolveSparseAccessors extends GltfTransform {
+import { BufferManager } from '../buffer-manager.js';
+import { GlTf } from '../gltf.js';
+import { ImageManager } from '../image-manager.js';
+import { GltfTransform } from './gltf-transform.js';
+import { SetDefaults } from './set-defaults.js';
+export declare class ResolveSparseAccessors extends GltfTransform {
     static Dependencies: (typeof SetDefaults)[];
-    transform(gltf: any, buffers: any, images: any): void;
+    transform(gltf: GlTf, buffers: BufferManager, images: ImageManager): void;
 }
-import { GltfTransform } from "./gltf-transform.js";
-import { SetDefaults } from "./set-defaults.js";

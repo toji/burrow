@@ -56,11 +56,11 @@ export class RenderSetProvider {
     }
     getRenderSet(meshes) {
         const renderSet = {
+            totalInstanceCount: 0,
             pipelineMaterials: new Map(),
             instanceBindGroup: this.instanceBindGroup
         };
         const instanceList = [];
-        let totalInstanceCount = 0;
         for (const mesh of meshes) {
             if (!this.meshFilter(mesh)) {
                 continue;
@@ -90,9 +90,9 @@ export class RenderSetProvider {
                 instanceList.push(instances);
             }
             instances.transforms.push(transform);
-            totalInstanceCount++;
+            renderSet.totalInstanceCount++;
         }
-        const instanceByteSize = totalInstanceCount * Float32Array.BYTES_PER_ELEMENT * 16;
+        const instanceByteSize = renderSet.totalInstanceCount * Float32Array.BYTES_PER_ELEMENT * 16;
         // Resize the buffer if needed.
         if (instanceByteSize > this.instanceBuffer.size) {
             let newSize = this.instanceBuffer.size * 2;

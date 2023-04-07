@@ -72,7 +72,7 @@ class DeferredRenderSetProvider extends RenderSetProvider {
   }
 
   meshFilter(mesh: SceneMesh): boolean {
-    return mesh.material?.transparent !== true;
+    return mesh.material?.transparent !== true && mesh.material?.unlit !== true;
   }
 
   createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline {
@@ -134,7 +134,7 @@ class ForwardRenderSetProvider extends RenderSetProvider {
   }
 
   meshFilter(mesh: SceneMesh): boolean {
-    return mesh.material?.transparent === true;
+    return mesh.material?.transparent === true || mesh.material?.unlit === true;
   }
 
   createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline {
@@ -201,7 +201,7 @@ export class DeferredRenderer extends RendererBase {
   textureVisualizer: TextureVisualizer;
 
   debugView: DebugViewType = DebugViewType.none;
-  enableBloom: boolean = true;
+  enableBloom: boolean = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
 
   frameBindGroupLayout: GPUBindGroupLayout;
   frameBindGroup: GPUBindGroup;
@@ -490,6 +490,8 @@ export class DeferredRenderer extends RendererBase {
   }
 
   drawRenderSet(renderPass: GPURenderPassEncoder, renderSet: RenderSet) {
+    if (!renderSet.totalInstanceCount) { return; } // Nothing to render
+
     renderPass.setBindGroup(1, renderSet.instanceBindGroup);
 
     for (const [pipeline, materialGeometries] of renderSet.pipelineMaterials.entries()) {

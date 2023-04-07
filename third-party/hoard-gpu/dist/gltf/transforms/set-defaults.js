@@ -1,5 +1,3 @@
-import { BufferManager } from '../buffer-manager.js';
-import { ImageManager } from '../image-manager.js';
 import { GltfTransform } from './gltf-transform.js';
 // To make it easier to reference the WebGL enums that glTF uses.
 const GL = WebGLRenderingContext;

@@ -16,7 +16,7 @@ function getComponentTypeArrayConstructor(componentType) {
 export class ResolveSparseAccessors extends GltfTransform {
     static Dependencies = [SetDefaults];
     transform(gltf, buffers, images) {
-        for (const accessor of gltf.accessors) {
+        for (const [index, accessor] of gltf.accessors.entries()) {
             if (accessor.bufferView === undefined || accessor.sparse) {
                 const componentCount = accessor.extras.componentCount;
                 const sparse = accessor.sparse;
@@ -57,10 +57,11 @@ export class ResolveSparseAccessors extends GltfTransform {
                 });
                 // Point the accessor at a new, non-sparse buffer view.
                 accessor.bufferView = buffers.createBufferViewFromArrayBuffer(arrayBufferPromise, {
+                    buffer: 0,
                     byteOffset: 0,
                     byteStride,
                     byteLength,
-                    name: `Populated Sparse Buffer View`,
+                    name: `Populated Sparse Buffer View #${index}`,
                     target: accessor.target,
                 });
                 // Not sparse any more.

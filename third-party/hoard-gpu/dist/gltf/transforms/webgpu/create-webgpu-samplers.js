@@ -60,10 +60,7 @@ function wrapToAddressMode(wrap) {
     }
 }
 export class CreateWebGpuSamplers extends WebGpuGltfTransform {
-    constructor(loaderOptions) {
-        super(loaderOptions);
-        this.samplerCache = new Map();
-    }
+    samplerCache = new Map();
     transform(gltf) {
         for (const sampler of gltf.samplers) {
             // Look up the sampler in a cache that spans all glTF's loaded with this

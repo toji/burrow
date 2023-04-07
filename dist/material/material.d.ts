@@ -16,12 +16,14 @@ export interface PbrMaterialDescriptor {
     transparent?: boolean;
     doubleSided?: boolean;
     alphaCutoff?: number;
+    unlit?: boolean;
 }
 export declare class RenderMaterial {
     bindGroup: GPUBindGroup;
     transparent: boolean;
     doubleSided: boolean;
     discard: boolean;
-    constructor(bindGroup: GPUBindGroup, transparent: boolean, doubleSided: boolean, discard: boolean);
+    unlit: boolean;
+    constructor(bindGroup: GPUBindGroup, transparent: boolean, doubleSided: boolean, discard: boolean, unlit: boolean);
     get key(): number;
 }

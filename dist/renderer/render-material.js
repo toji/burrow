@@ -104,13 +104,13 @@ export class RenderMaterialManager {
                     resource: desc.metallicRoughnessTexture?.createView() ?? this.opaqueWhite,
                 }, {
                     binding: 5,
-                    resource: desc.emissiveTexture?.createView() ?? this.transparentBlack,
+                    resource: desc.emissiveTexture?.createView() ?? this.opaqueWhite,
                 }, {
                     binding: 6,
                     resource: desc.occlusionTexture?.createView() ?? this.opaqueWhite,
                 }]
         });
-        return new RenderMaterial(materialBindGroup, desc.transparent ?? false, desc.doubleSided ?? true, (!!desc.alphaCutoff));
+        return new RenderMaterial(materialBindGroup, desc.transparent ?? false, desc.doubleSided ?? true, (!!desc.alphaCutoff), desc.unlit ?? false);
     }
 }
 //# sourceMappingURL=render-material.js.map
