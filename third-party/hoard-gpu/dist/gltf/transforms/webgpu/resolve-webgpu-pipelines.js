@@ -45,6 +45,7 @@ export class ResolveWebGpuPipelines extends WebGpuGltfTransform {
     ];
     globalPipelineCache = new Map();
     globalPipelineIndex = 0;
+    attributeLocations;
     constructor(loaderOptions) {
         super(loaderOptions);
         this.attributeLocations = loaderOptions.attributeLocations;

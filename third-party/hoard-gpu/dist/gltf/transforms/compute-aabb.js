@@ -1,5 +1,6 @@
 import { GltfTransform } from './gltf-transform.js';
 import { SetDefaults } from './set-defaults.js';
+// @ts-ignore
 import { vec3, mat4 } from 'https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/esm/index.js';
 // Very simple AABB tracking so that we can position cameras sensibly.
 export class AABB {

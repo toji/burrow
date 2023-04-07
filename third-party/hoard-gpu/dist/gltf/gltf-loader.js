@@ -214,8 +214,7 @@ export class GltfLoader {
             }
         }
         await Promise.all(transformResults.values());
-        // @ts-ignore
-        gltf.bufferViews = [...buffers.bufferViews];
+        gltf.bufferViews = await Promise.all(buffers.bufferViews.map((bufferView) => bufferView.toResolvedBufferView()));
         options.loadStats.loadTime = performance.now() - options.startTime;
         extras.loadStats = options.loadStats;
         return gltf;

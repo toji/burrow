@@ -42,12 +42,13 @@
       import { SceneObject } from '../dist/scene/node.js';
       import { Mesh } from '../dist/scene/mesh.js';
 
-      const LOCAL_MODELS = false;
+      const LOCAL_MODELS = true;
       let GltfModels;
       if (LOCAL_MODELS) {
         const GltfRootDir = './media/models';
         GltfModels = {
           boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+          box_animated: `${GltfRootDir}/BoxAnimated/glTF/BoxAnimated.gltf`,
           damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
           metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
           scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
@@ -127,9 +128,6 @@
         gltfLoader.loadFromUrl(path).then((result) => {
           scene = result.scene;
           animations = result.animations;
-          if (result.animations.length) {
-            console.log('Found animations:', result.animations);
-          }
         });
       }
       loadModel(modelPath);

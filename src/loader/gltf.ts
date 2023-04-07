@@ -1,7 +1,7 @@
 import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { WebGpuGltfLoader } from '../../../hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
-import { WebGpuTextureLoader } from '../../../hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
-import { ComputeAABB } from '../../../hoard-gpu/dist/gltf/transforms/compute-aabb.js'
+import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
+import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
+import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
 import { DeferredRenderer, Scene } from '../renderer/deferred-renderer.js';

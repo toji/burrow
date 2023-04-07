@@ -6,13 +6,13 @@ class DracoDecoder extends WorkerPool {
     constructor() {
         super(`draco/draco-worker.js`);
     }
-    decode(buffer, attributes, indexSize) {
-        const arrayBuffer = new Uint8Array(buffer);
+    decode(bytes, attributes, indexSize) {
+        const buffer = new Uint8Array(bytes);
         return this.dispatch({
-            buffer: arrayBuffer,
+            buffer,
             attributes,
             indexSize
-        }, [arrayBuffer.buffer]);
+        }, [buffer.buffer]);
     }
 }
 // Resolves every draco-encoded primitive in the glTF file into a regular buffer/buffer view.
@@ -67,10 +67,8 @@ export class ResolveDracoPrimitives extends GltfTransform {
         }
         // Find any primitives that need Draco decoding and decode them.
         const pendingPrimitives = [];
-        for (const meshIndex in gltf.meshes) {
-            const mesh = gltf.meshes[meshIndex];
-            for (const primitiveIndex in mesh.primitives) {
-                const primitive = mesh.primitives[primitiveIndex];
+        for (const [meshIndex, mesh] of gltf.meshes.entries()) {
+            for (const [primitiveIndex, primitive] of mesh.primitives.entries()) {
                 const dracoExt = primitive.extensions?.KHR_draco_mesh_compression;
                 if (dracoExt) {
                     pendingPrimitives.push(decodeDracoPrimitive(primitive, dracoExt, meshIndex, primitiveIndex));

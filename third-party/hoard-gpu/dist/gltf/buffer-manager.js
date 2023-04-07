@@ -19,7 +19,7 @@ export class BufferManager {
         }
         for (const bufferViewIndex in gltf.bufferViews) {
             const bufferView = gltf.bufferViews[bufferViewIndex];
-            this.#bufferViews[bufferViewIndex] = new BufferView(bufferView);
+            this.#bufferViews[bufferViewIndex] = new ManagedBufferView(bufferView);
             this.#buffers[bufferView.buffer].then((arrayBuffer) => {
                 this.#bufferViews[bufferViewIndex].resolveWithArrayBuffer(arrayBuffer);
             });
@@ -27,7 +27,7 @@ export class BufferManager {
     }
     createBufferViewFromArrayBuffer(bufferPromise, bufferView) {
         const bufferViewIndex = this.#bufferViews.length;
-        this.#bufferViews[bufferViewIndex] = new BufferView(bufferView);
+        this.#bufferViews[bufferViewIndex] = new ManagedBufferView(bufferView);
         Promise.resolve(bufferPromise).then((arrayBuffer) => {
             this.#bufferViews[bufferViewIndex].resolveWithArrayBuffer(arrayBuffer);
         });
@@ -35,7 +35,7 @@ export class BufferManager {
     }
     createEmptyBufferView(bufferView) {
         const bufferViewIndex = this.#bufferViews.length;
-        this.#bufferViews[bufferViewIndex] = new BufferView(bufferView);
+        this.#bufferViews[bufferViewIndex] = new ManagedBufferView(bufferView);
         return bufferViewIndex;
     }
     removeBufferView(index) {
@@ -48,7 +48,7 @@ export class BufferManager {
         return this.#bufferViews[index];
     }
     get bufferViews() {
-        return this.#bufferViews.values();
+        return [...this.#bufferViews.values()];
     }
     async updateCache(gltf, cache) {
         const json = structuredClone(gltf);
@@ -72,7 +72,8 @@ export class BufferManager {
         });
     }
 }
-class BufferView {
+export class ManagedBufferView {
+    buffer; // Unused
     byteOffset;
     byteLength;
     byteStride;
@@ -82,10 +83,11 @@ class BufferView {
     extras;
     #resolver;
     #byteArray;
-    constructor(bufferView = {}) {
+    constructor(bufferView) {
         this.#byteArray = new Promise((resolve) => {
             this.#resolver = resolve;
         });
+        this.buffer = bufferView.buffer ?? 0;
         this.byteOffset = bufferView.byteOffset ?? 0;
         this.byteStride = bufferView.byteStride;
         this.byteLength = bufferView.byteLength;
@@ -114,6 +116,19 @@ class BufferView {
             name: this.name,
             extension: this.extension,
             extras: this.extras,
+        };
+    }
+    async toResolvedBufferView() {
+        return {
+            buffer: this.buffer,
+            byteOffset: this.byteOffset,
+            byteStride: this.byteStride,
+            byteLength: this.byteLength,
+            target: this.target,
+            name: this.name,
+            extension: this.extension,
+            extras: this.extras,
+            byteArray: await this.asByteArray(),
         };
     }
 }
