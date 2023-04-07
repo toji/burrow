@@ -4,7 +4,7 @@ import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/we
 import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
-import { DeferredRenderer, Scene } from '../renderer/deferred-renderer.js';
+import { DeferredRenderer } from '../renderer/deferred-renderer.js';
 import { SceneObject, AbstractTransform, MatrixTransform, Transform } from '../scene/node.js';
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationSampler, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';

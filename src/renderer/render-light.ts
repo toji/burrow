@@ -1,4 +1,4 @@
-import { Scene } from "./deferred-renderer";
+import { Renderables } from './deferred-renderer.js';
 
 const MAX_POINT_LIGHTS = 64;
 const DIRECTIONAL_LIGHT_STRUCT_SIZE = 32;
@@ -44,20 +44,20 @@ export class RenderLightManager {
     });
   }
 
-  updateLights(scene: Scene) {
+  updateLights(renderables: Renderables) {
     // TODO: This shouldn't have to be updated every frame, but whatever.
-    this.pointLightCount = Math.min(scene.pointLights?.length || 0, MAX_POINT_LIGHTS);
+    this.pointLightCount = Math.min(renderables.pointLights.length || 0, MAX_POINT_LIGHTS);
 
     const pointLightCount = new Uint32Array(this.lightArrayBuffer, DIRECTIONAL_LIGHT_STRUCT_SIZE, 1);
     pointLightCount[0] = this.pointLightCount;
 
     for (let i = 0; i < this.pointLightCount; ++i) {
-      const sceneLight = scene.pointLights[i];
+      const sceneLight = renderables.pointLights[i];
       const lightOffset = DIRECTIONAL_LIGHT_STRUCT_SIZE + 16 + (i * POINT_LIGHT_STRUCT_SIZE);
 
       // TODO: These arrays could be cached.
       const pointLightArray = new Float32Array(this.lightArrayBuffer, lightOffset, 8);
-      pointLightArray.set(sceneLight.position);
+      pointLightArray.set(sceneLight.worldPosition);
       pointLightArray[3] = sceneLight.range || 0;
       pointLightArray.set(sceneLight.color || DEFAULT_COLOR, 4);
       pointLightArray[7] = sceneLight.intensity;

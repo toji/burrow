@@ -1,7 +1,7 @@
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
-import { SceneMesh } from '../renderer/deferred-renderer.js';
+import { Renderables, SceneMesh } from '../renderer/deferred-renderer.js';
 import { SceneObject, SceneObjectInit } from './node.js';
 
 export interface MeshGeometry {
@@ -44,11 +44,12 @@ export class Mesh extends SceneObject {
     return object;
   }
 
-  getRenderables(renderables: SceneMesh[] = []): SceneMesh[] {
-    renderables.push(...this.geometry.map((geometry) => { return {
+  getRenderables(renderables: Renderables) {
+    if (!this.visible) { return; }
+    renderables.meshes.push(...this.geometry.map((geometry) => { return {
       ...geometry,
       transform: this.worldMatrix
     }}));
-    return super.getRenderables(renderables);
+    super.getRenderables(renderables);
   }
 }

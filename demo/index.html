@@ -39,8 +39,9 @@
       import { OrbitCamera } from '../dist/orbit-camera.js';
       import { CubeGeometryDesc } from './cube.js';
       import { Mat4 } from '../third-party/gl-matrix/dist/src/index.js';
-      import { SceneObject } from '../dist/scene/node.js';
+      import { SceneObject, Transform } from '../dist/scene/node.js';
       import { Mesh } from '../dist/scene/mesh.js';
+      import { PointLight } from '../dist/scene/light.js';
 
       const LOCAL_MODELS = true;
       let GltfModels;
@@ -128,6 +129,7 @@
         gltfLoader.loadFromUrl(path).then((result) => {
           scene = result.scene;
           animations = result.animations;
+          scene.addChild(...lightState.pointLights);
         });
       }
       loadModel(modelPath);
@@ -203,19 +205,32 @@
         animateLights: true,
       };
 
+      for (const color of pointLightColors) {
+        const pointLight = new PointLight({
+          ...color,
+          transform: new Transform()
+        });
+        lightState.pointLights.push(pointLight);
+      }
+      scene.addChild(...lightState.pointLights);
+
       function updatePointLights(timestamp) {
-        if (lightState.animateLights || lightState.pointLights.length == 0) {
-          lightState.pointLights = [];
-          for (let i = 0; i < lightState.pointLightCount; ++i) {
+        for (let i = 0; i < pointLightColors.length; ++i) {
+          const pointLight = lightState.pointLights[i];
+          if (i >= lightState.pointLightCount) {
+            pointLight.visible = false;
+            continue;
+          }
+
+          pointLight.visible = true;
+          if (lightState.animateLights) {
             const r = (i / lightState.pointLightCount) * Math.PI * 2 + (timestamp/1000);
-            lightState.pointLights.push({
-              position: [
-                Math.sin(r) * 2.5,
-                Math.sin(timestamp / 1000 + (i / lightState.pointLightCount)) * 1.5,
-                Math.cos(r) * 2.5,
-              ],
-              ...pointLightColors[i % pointLightColors.length]
-            });
+            pointLight.transform.translation.set([
+              Math.sin(r) * 2.5,
+              Math.sin(timestamp / 1000 + (i / lightState.pointLightCount)) * 1.5,
+              Math.cos(r) * 2.5,
+            ]);
+            pointLight.transform.dirty = true;
           }
         }
       }
@@ -300,14 +315,15 @@
 
         updatePointLights(timestamp);
 
-        const renderScene = {
-          meshes: scene.getRenderables(), // TODO: This navigates the tree every frame == slow.
-          pointLights: lightState.pointLights
+        const renderables = {
+          meshes: [],
+          pointLights: [],
         };
+        scene.getRenderables(renderables); // TODO: This navigates the tree every frame == slow.
 
         const outputTexture = context.getCurrentTexture();
 
-        renderer.render(outputTexture, camera, renderScene);
+        renderer.render(outputTexture, camera, renderables);
 
         const frameEnd = performance.now();
         stats.frameMs = frameEnd - frameStart;
