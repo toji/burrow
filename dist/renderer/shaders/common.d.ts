@@ -1,0 +1,6 @@
+import { GeometryLayout } from '../../geometry/geometry-layout.js';
+export declare const cameraStruct = "\n  struct Camera {\n    projection: mat4x4f,\n    view: mat4x4f,\n    invViewProjection: mat4x4f,\n    position: vec3f,\n    time: f32,\n  };\n";
+export declare const lightStruct = "\n  struct DirectionalLight {\n    direction: vec3f,\n    color: vec3f,\n    intensity: f32,\n  };\n\n  struct PointLight {\n    position: vec3f,\n    range: f32,\n    color: vec3f,\n    intensity: f32,\n  };\n\n  struct Lights {\n    directionalLight: DirectionalLight,\n    pointLightCount: u32,\n    pointLights: array<PointLight>,\n  };\n";
+export declare const skinningFunctions = "\n  fn getSkinMatrix(joints: vec4u, weights: vec4f) -> mat4x4<f32> {\n    let joint0 = jointMat[joints.x] * invBindMat[joints.x];\n    let joint1 = jointMat[joints.y] * invBindMat[joints.y];\n    let joint2 = jointMat[joints.z] * invBindMat[joints.z];\n    let joint3 = jointMat[joints.w] * invBindMat[joints.w];\n\n    let skinMatrix = joint0 * weights.x +\n                     joint1 * weights.y +\n                     joint2 * weights.z +\n                     joint3 * weights.w;\n    return skinMatrix;\n  }\n";
+export declare function pbrMaterialInputs(group: number): string;
+export declare function getCommonVertexShader(layout: Readonly<GeometryLayout>, skinned?: boolean): any;

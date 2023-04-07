@@ -1,13 +1,13 @@
-import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
-import { getGBufferShader, getLightingShader } from '../shaders/deferred.js';
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
-import { SkyboxRenderer } from '../render-utils/skybox.js';
-import { TonemapRenderer } from '../render-utils/tonemap.js';
-import { RenderSetProvider } from '../render-utils/render-set.js';
-import { getForwardShader } from '../shaders/forward.js';
-import { BloomRenderer } from '../render-utils/bloom.js';
+import { RenderSetProvider } from './render-utils/render-set.js';
+import { BloomRenderer } from './render-utils/bloom.js';
+import { LightSpriteRenderer } from './render-utils/light-sprite.js';
+import { SkyboxRenderer } from './render-utils/skybox.js';
+import { TextureVisualizer } from './render-utils/texture-visualizer.js';
+import { TonemapRenderer } from './render-utils/tonemap.js';
+import { getGBufferShader, getLightingShader } from './shaders/deferred.js';
+import { getForwardShader } from './shaders/forward.js';
 export var DebugViewType;
 (function (DebugViewType) {
     DebugViewType["none"] = "none";
@@ -27,6 +27,7 @@ const cameraArray = new Float32Array(64);
 class DeferredRenderSetProvider extends RenderSetProvider {
     renderer;
     pipelineLayout;
+    skinnedPipelineLayout;
     constructor(renderer) {
         super(renderer.device, renderer.defaultMaterial);
         this.renderer = renderer;
@@ -35,21 +36,27 @@ class DeferredRenderSetProvider extends RenderSetProvider {
                 this.instanceBindGroupLayout,
                 renderer.renderMaterialManager.materialBindGroupLayout,
             ] });
+        this.skinnedPipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts: [
+                renderer.frameBindGroupLayout,
+                this.instanceBindGroupLayout,
+                renderer.renderMaterialManager.materialBindGroupLayout,
+                renderer.skinBindGroupLayout,
+            ] });
     }
     meshFilter(mesh) {
         return mesh.material?.transparent !== true && mesh.material?.unlit !== true;
     }
-    createPipeline(layout, material, key) {
+    createPipeline(layout, material, skinned, key) {
         // Things that will come from the material
         // (This is for opaque surfaces only!)
         const cullMode = material.doubleSided ? 'none' : 'back';
         const module = this.device.createShaderModule({
             label: `deferred shader module (key ${key})`,
-            code: getGBufferShader(layout, material),
+            code: getGBufferShader(layout, material, skinned),
         });
         return this.device.createRenderPipeline({
             label: `deferred render pipeline (key ${key})`,
-            layout: this.pipelineLayout,
+            layout: skinned ? this.skinnedPipelineLayout : this.pipelineLayout,
             vertex: {
                 module,
                 entryPoint: 'vertexMain',
@@ -84,6 +91,7 @@ class DeferredRenderSetProvider extends RenderSetProvider {
 class ForwardRenderSetProvider extends RenderSetProvider {
     renderer;
     pipelineLayout;
+    skinnedPipelineLayout;
     constructor(renderer) {
         super(renderer.device, renderer.defaultMaterial);
         this.renderer = renderer;
@@ -92,20 +100,26 @@ class ForwardRenderSetProvider extends RenderSetProvider {
                 this.instanceBindGroupLayout,
                 renderer.renderMaterialManager.materialBindGroupLayout,
             ] });
+        this.skinnedPipelineLayout = this.device.createPipelineLayout({ bindGroupLayouts: [
+                renderer.frameBindGroupLayout,
+                this.instanceBindGroupLayout,
+                renderer.renderMaterialManager.materialBindGroupLayout,
+                renderer.skinBindGroupLayout,
+            ] });
     }
     meshFilter(mesh) {
         return mesh.material?.transparent === true || mesh.material?.unlit === true;
     }
-    createPipeline(layout, material, key) {
+    createPipeline(layout, material, skinned, key) {
         // Things that will come from the material
         const cullMode = material.doubleSided ? 'none' : 'back';
         const module = this.device.createShaderModule({
             label: `forward shader module (key ${key})`,
-            code: getForwardShader(layout, material),
+            code: getForwardShader(layout, material, skinned),
         });
         return this.device.createRenderPipeline({
             label: `forward render pipeline (key ${key})`,
-            layout: this.pipelineLayout,
+            layout: skinned ? this.skinnedPipelineLayout : this.pipelineLayout,
             vertex: {
                 module,
                 entryPoint: 'vertexMain',
@@ -418,6 +432,9 @@ export class DeferredRenderer extends RendererBase {
                     if (geometry.indexBuffer) {
                         renderPass.setIndexBuffer(geometry.indexBuffer.buffer, geometry.indexBuffer.indexFormat, geometry.indexBuffer.offset);
                     }
+                    if (instances.skin) {
+                        renderPass.setBindGroup(3, instances.skin.bindGroup);
+                    }
                     if (geometry.indexBuffer) {
                         renderPass.drawIndexed(geometry.drawCount, instances.instanceCount, 0, 0, instances.firstInstance);
                     }
@@ -431,6 +448,12 @@ export class DeferredRenderer extends RendererBase {
     render(output, camera, renderables) {
         this.updateCamera(camera);
         this.renderLightManager.updateLights(renderables);
+        for (const mesh of renderables.meshes) {
+            // TODO: A single skin COULD be used for multiple meshes, which would make this redundant.
+            if (mesh.skin) {
+                mesh.skin.updateJoints();
+            }
+        }
         // Compile renderable list out of scene meshes.
         const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(renderables.meshes);
         const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(renderables.meshes);

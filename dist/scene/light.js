@@ -22,11 +22,11 @@ export class PointLight extends SceneObject {
         return object;
     }
     getRenderables(renderables) {
+        super.getRenderables(renderables);
         if (!this.visible) {
             return;
         }
         renderables.pointLights.push(this);
-        return super.getRenderables(renderables);
     }
 }
 //# sourceMappingURL=light.js.map

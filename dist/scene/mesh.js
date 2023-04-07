@@ -1,8 +1,4 @@
 import { SceneObject } from './node.js';
-export class MeshSkin {
-    inverseBindMatrices;
-    joints;
-}
 export class Mesh extends SceneObject {
     geometry;
     skin;
@@ -23,16 +19,17 @@ export class Mesh extends SceneObject {
         return object;
     }
     getRenderables(renderables) {
+        super.getRenderables(renderables);
         if (!this.visible) {
             return;
         }
         renderables.meshes.push(...this.geometry.map((geometry) => {
             return {
                 ...geometry,
+                skin: this.skin,
                 transform: this.worldMatrix
             };
         }));
-        super.getRenderables(renderables);
     }
 }
 //# sourceMappingURL=mesh.js.map

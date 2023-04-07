@@ -1,16 +1,17 @@
 /// <reference types="dist" />
-import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
 import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
-import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
-import { SkyboxRenderer } from '../render-utils/skybox.js';
-import { TonemapRenderer } from '../render-utils/tonemap.js';
-import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
-import { BloomRenderer } from '../render-utils/bloom.js';
+import { RendererBase } from './renderer-base.js';
+import { RenderSet, RenderSetProvider } from './render-utils/render-set.js';
+import { BloomRenderer } from './render-utils/bloom.js';
+import { LightSpriteRenderer } from './render-utils/light-sprite.js';
+import { SkyboxRenderer } from './render-utils/skybox.js';
+import { TextureVisualizer } from './render-utils/texture-visualizer.js';
+import { TonemapRenderer } from './render-utils/tonemap.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
+import { RenderSkin } from '../geometry/skin.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -30,6 +31,7 @@ export interface SceneMesh {
     transform: Mat4;
     geometry: RenderGeometry;
     material?: RenderMaterial;
+    skin?: RenderSkin;
 }
 export interface Renderables {
     meshes: SceneMesh[];
@@ -39,16 +41,18 @@ export interface Renderables {
 declare class DeferredRenderSetProvider extends RenderSetProvider {
     renderer: DeferredRenderer;
     pipelineLayout: GPUPipelineLayout;
+    skinnedPipelineLayout: GPUPipelineLayout;
     constructor(renderer: DeferredRenderer);
     meshFilter(mesh: SceneMesh): boolean;
-    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline;
+    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean, key: string): GPURenderPipeline;
 }
 declare class ForwardRenderSetProvider extends RenderSetProvider {
     renderer: DeferredRenderer;
     pipelineLayout: GPUPipelineLayout;
+    skinnedPipelineLayout: GPUPipelineLayout;
     constructor(renderer: DeferredRenderer);
     meshFilter(mesh: SceneMesh): boolean;
-    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline;
+    createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean, key: string): GPURenderPipeline;
 }
 export declare class DeferredRenderer extends RendererBase {
     attachmentSize: GPUExtent3DDictStrict;

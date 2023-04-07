@@ -1,13 +1,14 @@
 import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
-import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
-import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
 import { DeferredRenderer } from '../renderer/deferred-renderer.js';
 import { SceneObject, AbstractTransform, MatrixTransform, Transform } from '../scene/node.js';
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationSampler, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';
+
+import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
+import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
+import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 
 const GL = WebGLRenderingContext;
 
@@ -98,12 +99,7 @@ export class GltfLoader {
       }
 
       const texture = gltf.textures[index];
-      if (texture.source == undefined) {
-        return null;
-      }
-
-      const image = gltf.images[texture.source];
-      return image.extras?.gpu?.texture;
+      return texture?.extras?.gpu?.texture;
     }
 
     //-----------
@@ -281,14 +277,42 @@ export class GltfLoader {
       }
     }
 
+    //-------
+    // Skins
+    //-------
+    const skins = [];
+    if (gltf.skins) {
+      for (const skin of (gltf.skins as any[])) {
+        // TODO: May not have an inverseBindMatrices, if so should fill with identity matrices.
+        const invBindMatrixAccessor = gltf.accessors[skin.inverseBindMatrices];
+        const inverseBindMatrices = getAccessorTypedArray(invBindMatrixAccessor) as Float32Array;
+
+        const joints: SceneObject[] = [];
+        for (const jointIndex of skin.joints) {
+          joints.push(sceneNodes[jointIndex]);
+        }
+
+        // TODO: Need to make this clone-able
+        skins.push(this.renderer.createSkin({
+          inverseBindMatrices,
+          joints,
+        }));
+      }
+    }
+
     // Second pass over the nodes to build the tree.
     for (const [index, node] of (gltf.nodes as any[]).entries()) {
-      if (!node.children) { continue; }
       const sceneNode = sceneNodes[index];
+      if (node.skin !== undefined) {
+        (sceneNode as Mesh).skin = skins[node.skin];
+      }
+      if (!node.children) { continue; }
       for (const child of node.children) {
         sceneNode.addChild(sceneNodes[child]);
       }
     }
+
+
 
     // @ts-ignore
     const scene = gltf.scenes[gltf.scene];
@@ -298,6 +322,10 @@ export class GltfLoader {
     const sceneTransform = new Mat4();
     if (url.includes('Sponza')) {
       sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1]*0.5, -sceneAabb.center[2]]);
+    } else if (url.includes('dragon')) {
+      const scale = 0.5;
+      sceneTransform.scale([scale, scale, scale]);
+      sceneTransform.translate([-sceneAabb.center[0] * 1.2, -sceneAabb.center[1], -sceneAabb.center[2] * -0.5]);
     } else {
       sceneTransform.scale([2/sceneAabb.radius, 2/sceneAabb.radius, 2/sceneAabb.radius]);
       sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1], -sceneAabb.center[2]]);
