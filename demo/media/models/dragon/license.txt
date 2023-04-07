@@ -1,0 +1,8 @@
+Model Information:
+* title:	Dragon (animated)
+* source:	https://sketchfab.com/3d-models/dragon-animated-ec96def689d044698298dc6ff9962ae0
+* author:	3D Voxel (https://sketchfab.com/3dvoxel)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works

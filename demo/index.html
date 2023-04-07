@@ -45,18 +45,16 @@
 
       const LOCAL_MODELS = true;
       let GltfModels;
+      const LocalRootDir = './media/models';
       if (LOCAL_MODELS) {
-        const GltfRootDir = './media/models';
         GltfModels = {
-          arena: `${GltfRootDir}/arena/scene.gltf`,
-          hell_arena: `${GltfRootDir}/hell_arena/scene.gltf`,
-          dragon: `${GltfRootDir}/dragon/scene.gltf`,
-          boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
-          box_animated: `${GltfRootDir}/BoxAnimated/glTF/BoxAnimated.gltf`,
-          damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
-          metal_rough_spheres: `${GltfRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
-          scifi_helmet: `${GltfRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
-          water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
+          boom_box: `${LocalRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
+          box_animated: `${LocalRootDir}/BoxAnimated/glTF/BoxAnimated.gltf`,
+          damaged_helmet: `${LocalRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
+          dragon: `${LocalRootDir}/dragon/dragon.glb`,
+          metal_rough_spheres: `${LocalRootDir}/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf`,
+          scifi_helmet: `${LocalRootDir}/SciFiHelmet/glTF/SciFiHelmet.gltf`,
+          water_bottle: `${LocalRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
         };
       } else {
         const GltfRootDir = '../../glTF-Sample-Models/2.0';
@@ -68,6 +66,7 @@
           buggy: `${GltfRootDir}/Buggy/glTF/Buggy.gltf`,
           corset: `${GltfRootDir}/Corset/glTF-Binary/Corset.glb`,
           damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
+          dragon: `${LocalRootDir}/dragon/dragon.glb`,
           emissive_strength: `${GltfRootDir}/EmissiveStrengthTest/glTF/EmissiveStrengthTest.gltf`,
           flight_helmet: `${GltfRootDir}/FlightHelmet/glTF/FlightHelmet.gltf`,
           lantern: `${GltfRootDir}/Lantern/glTF/Lantern.gltf`,
@@ -84,7 +83,7 @@
         };
       }
 
-      let modelPath = GltfModels.scifi_helmet;
+      let modelPath = GltfModels.dragon;
 
       const EnvRootDir = './media/environments';
       const EnvMaps = {
@@ -96,7 +95,7 @@
         symmetrical_garden: `${EnvRootDir}/symmetrical_garden_1k_ibl.ktx`,
         zavelstein: `${EnvRootDir}/zavelstein_ibl.ktx`,
       };
-      let envPath = EnvMaps.quattro_canti;
+      let envPath = EnvMaps.zavelstein;
 
       // Features to enable on the device if available.
       const preferredFeatures = ['texture-compression-bc', 'texture-compression-etc2'];
@@ -146,6 +145,9 @@
 
             const options = [{text: 'none', value: null }];
             for(const animation of result.animations) {
+              if (animation.name.includes('IDLE')) {
+                selectedAnimation = animation;
+              }
               options.push({ text: animation.name, value: animation });
             }
             animationPane.options = options;

@@ -6,9 +6,9 @@ import { SceneObject, AbstractTransform, MatrixTransform, Transform } from '../s
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationSampler, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';
 
-import { WebGpuGltfLoader } from '../../../hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
-import { WebGpuTextureLoader } from '../../../hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
-import { ComputeAABB } from '../../../hoard-gpu/dist/gltf/transforms/compute-aabb.js'
+import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js'
+import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js'
+import { ComputeAABB } from '../../third-party/hoard-gpu/dist/gltf/transforms/compute-aabb.js'
 
 const GL = WebGLRenderingContext;
 
@@ -99,12 +99,7 @@ export class GltfLoader {
       }
 
       const texture = gltf.textures[index];
-      if (texture.source == undefined) {
-        return null;
-      }
-
-      const image = gltf.images[texture.source];
-      return image.extras?.gpu?.texture;
+      return texture?.extras?.gpu?.texture;
     }
 
     //-----------
@@ -328,8 +323,9 @@ export class GltfLoader {
     if (url.includes('Sponza')) {
       sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1]*0.5, -sceneAabb.center[2]]);
     } else if (url.includes('dragon')) {
-      sceneTransform.scale([2/sceneAabb.radius, 2/sceneAabb.radius, 2/sceneAabb.radius]);
-      sceneTransform.translate([-sceneAabb.center[0] * 1.2, -sceneAabb.center[1], -sceneAabb.center[2] * -4]);
+      const scale = 0.5;
+      sceneTransform.scale([scale, scale, scale]);
+      sceneTransform.translate([-sceneAabb.center[0] * 1.2, -sceneAabb.center[1], -sceneAabb.center[2] * -0.5]);
     } else {
       sceneTransform.scale([2/sceneAabb.radius, 2/sceneAabb.radius, 2/sceneAabb.radius]);
       sceneTransform.translate([-sceneAabb.center[0], -sceneAabb.center[1], -sceneAabb.center[2]]);
