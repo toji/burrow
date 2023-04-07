@@ -1,6 +1,6 @@
 /// <reference types="dist" />
 import { TextureVisualizer } from '../render-utils/texture-visualizer.js';
-import { Mat4, Vec3, Vec3Like, Vec4Like } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderGeometry } from '../geometry/geometry.js';
@@ -10,6 +10,7 @@ import { SkyboxRenderer } from '../render-utils/skybox.js';
 import { TonemapRenderer } from '../render-utils/tonemap.js';
 import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
 import { BloomRenderer } from '../render-utils/bloom.js';
+import { DirectionalLight, PointLight } from '../scene/light.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -30,21 +31,10 @@ export interface SceneMesh {
     geometry: RenderGeometry;
     material?: RenderMaterial;
 }
-export interface DirectionalLight {
-    direction: Vec3Like;
-    color?: Vec4Like;
-    intensity?: number;
-}
-export interface PointLight {
-    position: Vec3Like;
-    range?: number;
-    color?: Vec3Like;
-    intensity?: number;
-}
-export interface Scene {
+export interface Renderables {
     meshes: SceneMesh[];
     directionalLight?: DirectionalLight;
-    pointLights?: PointLight[];
+    pointLights: PointLight[];
 }
 declare class DeferredRenderSetProvider extends RenderSetProvider {
     renderer: DeferredRenderer;
@@ -95,6 +85,6 @@ export declare class DeferredRenderer extends RendererBase {
     getLightingPipeline(): GPURenderPipeline;
     updateCamera(camera: Camera): void;
     drawRenderSet(renderPass: GPURenderPassEncoder, renderSet: RenderSet): void;
-    render(output: GPUTexture, camera: Camera, scene: Scene): void;
+    render(output: GPUTexture, camera: Camera, renderables: Renderables): void;
 }
 export {};

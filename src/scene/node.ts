@@ -1,9 +1,10 @@
 import { Mat4, Quat, Vec3, Vec3Like } from '../../third-party/gl-matrix/dist/src/index.js';
 import { QuatLike } from '../../third-party/gl-matrix/dist/src/quat.js';
 import { AnimationTarget } from '../animation/animation.js';
-import { SceneMesh } from '../renderer/deferred-renderer.js';
+import { Renderables, SceneMesh } from '../renderer/deferred-renderer.js';
 
 export interface AbstractTransform {
+  dirty: boolean;
   copy(): AbstractTransform;
   getLocalMatrix(): Readonly<Mat4>;
 }
@@ -23,17 +24,13 @@ export class Transform implements AbstractTransform {
   rotation: Quat;
   scale: Vec3;
 
-  #localMatrixDirty = true;
+  dirty = true;
   #localMatrix = new Mat4();
 
   constructor(values: TransformInit = {}) {
     this.translation = new Vec3(values.translation ?? DEFAULT_TRANSLATION);
     this.rotation = new Quat(values.rotation ?? DEFAULT_ROTATION);
     this.scale = new Vec3(values.scale ?? DEFAULT_SCALE);
-  }
-
-  markDirty() {
-    this.#localMatrixDirty = false;
   }
 
   copy(): AbstractTransform {
@@ -45,12 +42,12 @@ export class Transform implements AbstractTransform {
   }
 
   getLocalMatrix(): Readonly<Mat4> {
-    if (this.#localMatrixDirty) {
+    if (this.dirty) {
       Mat4.fromRotationTranslationScale(this.#localMatrix,
         this.rotation,
         this.translation,
         this.scale);
-      this.#localMatrixDirty = false;
+      this.dirty = false;
     }
     return this.#localMatrix;
   }
@@ -58,6 +55,7 @@ export class Transform implements AbstractTransform {
 
 export class MatrixTransform implements AbstractTransform {
   matrix: Mat4;
+  dirty = true;
 
   constructor(matrix?: Mat4) {
     this.matrix = new Mat4(matrix);
@@ -79,6 +77,8 @@ export class IdentityTransform implements AbstractTransform {
     return new IdentityTransform();
   }
 
+  get dirty(): boolean { return false; }
+
   getLocalMatrix(): Readonly<Mat4> {
     return IDENTITY_MATRIX;
   }
@@ -95,6 +95,7 @@ export class SceneObject {
 
   // TODO: This right here is probably a good argument for embracing ECS again.
   animationTarget: AnimationTarget;
+  visible: boolean = true;
 
   #parent: SceneObject = null;
   #children: Set<SceneObject>;
@@ -103,6 +104,7 @@ export class SceneObject {
 
   #worldMatrixDirty = true;
   #worldMatrix: Mat4 = new Mat4();
+  #worldPos: Vec3;
 
   constructor(options: SceneObjectInit = {}) {
     this.label = options.label;
@@ -132,33 +134,37 @@ export class SceneObject {
     }
   }
 
-  addChild(child: SceneObject) {
-    if (child.parent && child.parent != this) {
-      child.parent.removeChild(child);
-    }
+  addChild(...children: SceneObject[]) {
+    for (const child of children) {
+      if (child.parent && child.parent != this) {
+        child.parent.removeChild(child);
+      }
 
-    if (!this.#children) { this.#children = new Set(); }
-    this.#children.add(child);
-    child.#parent = this;
-    child.#makeDirty();
-  }
-
-  removeChild(child: SceneObject) {
-    const removed = this.#children?.delete(child);
-    if (removed) {
-      child.#parent = null;
+      if (!this.#children) { this.#children = new Set(); }
+      this.#children.add(child);
+      child.#parent = this;
       child.#makeDirty();
     }
   }
 
+  removeChild(...children: SceneObject[]) {
+    for (const child of children) {
+      const removed = this.#children?.delete(child);
+      if (removed) {
+        child.#parent = null;
+        child.#makeDirty();
+      }
+    }
+  }
+
   // TODO: Ripe for optimization!
-  getRenderables(renderables: SceneMesh[] = []): SceneMesh[] {
+  getRenderables(renderables: Renderables) {
+    if (!this.visible) { return; }
     if (this.#children) {
       for (const child of this.#children) {
         child.getRenderables(renderables);
       }
     }
-    return renderables;
   }
 
   get children(): SceneObject[] {
@@ -183,7 +189,7 @@ export class SceneObject {
   }
 
   get worldMatrix(): Readonly<Mat4> {
-    if (this.#worldMatrixDirty) {
+    if (this.#worldMatrixDirty || this.transform.dirty) {
       if (!this.parent) {
         this.#worldMatrix.set(this.localMatrix);
       } else {
@@ -192,6 +198,13 @@ export class SceneObject {
       this.#worldMatrixDirty = false;
     }
     return this.#worldMatrix;
+  }
+
+  get worldPosition(): Readonly<Vec3> {
+    if (!this.#worldPos) {
+      this.#worldPos = new Vec3();
+    }
+    return Vec3.transformMat4(this.#worldPos, DEFAULT_TRANSLATION, this.worldMatrix) as Vec3;
   }
 
   #makeDirty() {

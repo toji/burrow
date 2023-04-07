@@ -6,15 +6,12 @@ export class Transform {
     translation;
     rotation;
     scale;
-    #localMatrixDirty = true;
+    dirty = true;
     #localMatrix = new Mat4();
     constructor(values = {}) {
         this.translation = new Vec3(values.translation ?? DEFAULT_TRANSLATION);
         this.rotation = new Quat(values.rotation ?? DEFAULT_ROTATION);
         this.scale = new Vec3(values.scale ?? DEFAULT_SCALE);
-    }
-    markDirty() {
-        this.#localMatrixDirty = false;
     }
     copy() {
         return new Transform({
@@ -24,15 +21,16 @@ export class Transform {
         });
     }
     getLocalMatrix() {
-        if (this.#localMatrixDirty) {
+        if (this.dirty) {
             Mat4.fromRotationTranslationScale(this.#localMatrix, this.rotation, this.translation, this.scale);
-            this.#localMatrixDirty = false;
+            this.dirty = false;
         }
         return this.#localMatrix;
     }
 }
 export class MatrixTransform {
     matrix;
+    dirty = true;
     constructor(matrix) {
         this.matrix = new Mat4(matrix);
     }
@@ -48,6 +46,7 @@ export class IdentityTransform {
     copy() {
         return new IdentityTransform();
     }
+    get dirty() { return false; }
     getLocalMatrix() {
         return IDENTITY_MATRIX;
     }
@@ -56,11 +55,13 @@ export class SceneObject {
     label;
     // TODO: This right here is probably a good argument for embracing ECS again.
     animationTarget;
+    visible = true;
     #parent = null;
     #children;
     #transform;
     #worldMatrixDirty = true;
     #worldMatrix = new Mat4();
+    #worldPos;
     constructor(options = {}) {
         this.label = options.label;
         this.#transform = options.transform || new IdentityTransform();
@@ -83,32 +84,38 @@ export class SceneObject {
             }
         }
     }
-    addChild(child) {
-        if (child.parent && child.parent != this) {
-            child.parent.removeChild(child);
-        }
-        if (!this.#children) {
-            this.#children = new Set();
-        }
-        this.#children.add(child);
-        child.#parent = this;
-        child.#makeDirty();
-    }
-    removeChild(child) {
-        const removed = this.#children?.delete(child);
-        if (removed) {
-            child.#parent = null;
+    addChild(...children) {
+        for (const child of children) {
+            if (child.parent && child.parent != this) {
+                child.parent.removeChild(child);
+            }
+            if (!this.#children) {
+                this.#children = new Set();
+            }
+            this.#children.add(child);
+            child.#parent = this;
             child.#makeDirty();
         }
     }
+    removeChild(...children) {
+        for (const child of children) {
+            const removed = this.#children?.delete(child);
+            if (removed) {
+                child.#parent = null;
+                child.#makeDirty();
+            }
+        }
+    }
     // TODO: Ripe for optimization!
-    getRenderables(renderables = []) {
+    getRenderables(renderables) {
+        if (!this.visible) {
+            return;
+        }
         if (this.#children) {
             for (const child of this.#children) {
                 child.getRenderables(renderables);
             }
         }
-        return renderables;
     }
     get children() {
         return [...this.#children?.values()] || [];
@@ -127,7 +134,7 @@ export class SceneObject {
         return this.#transform.getLocalMatrix();
     }
     get worldMatrix() {
-        if (this.#worldMatrixDirty) {
+        if (this.#worldMatrixDirty || this.transform.dirty) {
             if (!this.parent) {
                 this.#worldMatrix.set(this.localMatrix);
             }
@@ -137,6 +144,12 @@ export class SceneObject {
             this.#worldMatrixDirty = false;
         }
         return this.#worldMatrix;
+    }
+    get worldPosition() {
+        if (!this.#worldPos) {
+            this.#worldPos = new Vec3();
+        }
+        return Vec3.transformMat4(this.#worldPos, DEFAULT_TRANSLATION, this.worldMatrix);
     }
     #makeDirty() {
         if (this.#worldMatrixDirty) {

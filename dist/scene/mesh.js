@@ -22,14 +22,17 @@ export class Mesh extends SceneObject {
         this.copyChildren(object);
         return object;
     }
-    getRenderables(renderables = []) {
-        renderables.push(...this.geometry.map((geometry) => {
+    getRenderables(renderables) {
+        if (!this.visible) {
+            return;
+        }
+        renderables.meshes.push(...this.geometry.map((geometry) => {
             return {
                 ...geometry,
                 transform: this.worldMatrix
             };
         }));
-        return super.getRenderables(renderables);
+        super.getRenderables(renderables);
     }
 }
 //# sourceMappingURL=mesh.js.map

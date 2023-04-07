@@ -428,12 +428,12 @@ export class DeferredRenderer extends RendererBase {
             }
         }
     }
-    render(output, camera, scene) {
+    render(output, camera, renderables) {
         this.updateCamera(camera);
-        this.renderLightManager.updateLights(scene);
+        this.renderLightManager.updateLights(renderables);
         // Compile renderable list out of scene meshes.
-        const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(scene.meshes);
-        const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(scene.meshes);
+        const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(renderables.meshes);
+        const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(renderables.meshes);
         const encoder = this.device.createCommandEncoder();
         const gBufferPass = encoder.beginRenderPass({
             label: 'gBuffer pass',

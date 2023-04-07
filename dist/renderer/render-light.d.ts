@@ -1,5 +1,5 @@
 /// <reference types="dist" />
-import { Scene } from "./deferred-renderer";
+import { Renderables } from './deferred-renderer.js';
 export declare class RenderLightManager {
     device: GPUDevice;
     lightBuffer: GPUBuffer;
@@ -9,5 +9,5 @@ export declare class RenderLightManager {
     defaultEnvironment: GPUTexture;
     environmentSampler: GPUSampler;
     constructor(device: GPUDevice);
-    updateLights(scene: Scene): void;
+    updateLights(renderables: Renderables): void;
 }

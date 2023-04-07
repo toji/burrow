@@ -11,6 +11,8 @@ import { TonemapRenderer } from '../render-utils/tonemap.js';
 import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
 import { getForwardShader } from '../shaders/forward.js';
 import { BloomRenderer } from '../render-utils/bloom.js';
+import { SceneObject } from '../scene/node.js';
+import { DirectionalLight, PointLight } from '../scene/light.js';
 
 export enum DebugViewType {
   none = "none",
@@ -39,23 +41,10 @@ export interface SceneMesh {
   material?: RenderMaterial,
 }
 
-export interface DirectionalLight {
-  direction: Vec3Like;
-  color?: Vec4Like;
-  intensity?: number;
-}
-
-export interface PointLight {
-  position: Vec3Like;
-  range?: number;
-  color?: Vec3Like;
-  intensity?: number;
-}
-
-export interface Scene {
+export interface Renderables {
   meshes: SceneMesh[];
   directionalLight?: DirectionalLight;
-  pointLights?: PointLight[];
+  pointLights: PointLight[];
 }
 
 class DeferredRenderSetProvider extends RenderSetProvider {
@@ -520,13 +509,13 @@ export class DeferredRenderer extends RendererBase {
     }
   }
 
-  render(output: GPUTexture, camera: Camera, scene: Scene) {
+  render(output: GPUTexture, camera: Camera, renderables: Renderables) {
     this.updateCamera(camera);
-    this.renderLightManager.updateLights(scene);
+    this.renderLightManager.updateLights(renderables);
 
     // Compile renderable list out of scene meshes.
-    const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(scene.meshes);
-    const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(scene.meshes);
+    const deferredRenderSet = this.deferredRenderSetProvider.getRenderSet(renderables.meshes);
+    const forwardRenderSet = this.forwardRenderSetProvider.getRenderSet(renderables.meshes);
 
     const encoder = this.device.createCommandEncoder();
 
