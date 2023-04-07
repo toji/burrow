@@ -45,11 +45,12 @@ export class Mesh extends SceneObject {
   }
 
   getRenderables(renderables: Renderables) {
+    super.getRenderables(renderables);
     if (!this.visible) { return; }
     renderables.meshes.push(...this.geometry.map((geometry) => { return {
       ...geometry,
       transform: this.worldMatrix
     }}));
-    super.getRenderables(renderables);
+
   }
 }

@@ -42,13 +42,13 @@ export class Transform implements AbstractTransform {
   }
 
   getLocalMatrix(): Readonly<Mat4> {
-    if (this.dirty) {
+    //if (this.dirty) {
       Mat4.fromRotationTranslationScale(this.#localMatrix,
         this.rotation,
         this.translation,
         this.scale);
-      this.dirty = false;
-    }
+      //this.dirty = false;
+    //}
     return this.#localMatrix;
   }
 }
@@ -160,6 +160,7 @@ export class SceneObject {
   // TODO: Ripe for optimization!
   getRenderables(renderables: Renderables) {
     if (!this.visible) { return; }
+    this.#updateWorldMatrix();
     if (this.#children) {
       for (const child of this.#children) {
         child.getRenderables(renderables);
@@ -190,12 +191,7 @@ export class SceneObject {
 
   get worldMatrix(): Readonly<Mat4> {
     if (this.#worldMatrixDirty || this.transform.dirty) {
-      if (!this.parent) {
-        this.#worldMatrix.set(this.localMatrix);
-      } else {
-        Mat4.mul(this.#worldMatrix, this.parent.worldMatrix, this.localMatrix);
-      }
-      this.#worldMatrixDirty = false;
+      this.#updateWorldMatrix();
     }
     return this.#worldMatrix;
   }
@@ -205,6 +201,15 @@ export class SceneObject {
       this.#worldPos = new Vec3();
     }
     return Vec3.transformMat4(this.#worldPos, DEFAULT_TRANSLATION, this.worldMatrix) as Vec3;
+  }
+
+  #updateWorldMatrix() {
+    if (!this.parent) {
+      this.#worldMatrix.set(this.localMatrix);
+    } else {
+      Mat4.mul(this.#worldMatrix, this.parent.worldMatrix, this.localMatrix);
+    }
+    this.#worldMatrixDirty = false;
   }
 
   #makeDirty() {

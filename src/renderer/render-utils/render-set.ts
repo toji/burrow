@@ -1,8 +1,8 @@
-import { Mat4 } from "../../third-party/gl-matrix/dist/src/index.js";
-import { GeometryLayout } from "../geometry/geometry-layout.js";
-import { RenderGeometry } from "../geometry/geometry.js";
-import { RenderMaterial } from "../material/material.js";
-import { SceneMesh } from "../renderer/deferred-renderer.js";
+import { Mat4 } from "../../../third-party/gl-matrix/dist/src/index.js";
+import { GeometryLayout } from "../../geometry/geometry-layout.js";
+import { RenderGeometry } from "../../geometry/geometry.js";
+import { RenderMaterial } from "../../material/material.js";
+import { SceneMesh } from "../deferred-renderer.js";
 
 const INITIAL_INSTANCE_COUNT = 1024;
 const INSTANCE_SIZE = 64;

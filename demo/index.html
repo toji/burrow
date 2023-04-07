@@ -118,18 +118,22 @@
 
       const cubeGeometry = renderer.createGeometry(CubeGeometryDesc);
 
+      let sceneRoot = new SceneObject();
+
       let scene = new Mesh({
         geometry: { geometry: cubeGeometry }
       });
+      sceneRoot.addChild(scene);
 
       let animations = [];
 
       function loadModel(path) {
         modelPath = path;
         gltfLoader.loadFromUrl(path).then((result) => {
+          sceneRoot.removeChild(scene);
           scene = result.scene;
+          sceneRoot.addChild(scene);
           animations = result.animations;
-          scene.addChild(...lightState.pointLights);
         });
       }
       loadModel(modelPath);
@@ -212,7 +216,7 @@
         });
         lightState.pointLights.push(pointLight);
       }
-      scene.addChild(...lightState.pointLights);
+      sceneRoot.addChild(...lightState.pointLights);
 
       function updatePointLights(timestamp) {
         for (let i = 0; i < pointLightColors.length; ++i) {
@@ -230,7 +234,6 @@
               Math.sin(timestamp / 1000 + (i / lightState.pointLightCount)) * 1.5,
               Math.cos(r) * 2.5,
             ]);
-            pointLight.transform.dirty = true;
           }
         }
       }
@@ -319,7 +322,7 @@
           meshes: [],
           pointLights: [],
         };
-        scene.getRenderables(renderables); // TODO: This navigates the tree every frame == slow.
+        sceneRoot.getRenderables(renderables); // TODO: This navigates the tree every frame == slow.
 
         const outputTexture = context.getCurrentTexture();
 

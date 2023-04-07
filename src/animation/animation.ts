@@ -94,9 +94,7 @@ export class AnimationChannel {
 
   applyAtTime(t: number, target: AnimationTarget) {
     const sceneObject = target.objects[this.targetIndex];
-    const transform = sceneObject.transform.copy(); // TODO: NOT THIS!
-    this.sampler.sampleValue(transform[this.path], t);
-    sceneObject.transform = transform;
+    this.sampler.sampleValue(sceneObject.transform[this.path], t);
   }
 }
 

@@ -1,17 +1,19 @@
-import { TextureVisualizer } from '../render-utils/texture-visualizer.js'
-import { getGBufferShader, getLightingShader } from '../shaders/deferred.js';
-import { Mat4, Vec3, Vec3Like, Vec4Like } from '../../third-party/gl-matrix/dist/src/index.js';
-import { LightSpriteRenderer } from '../render-utils/light-sprite.js';
-import { RendererBase } from './renderer-base.js';
+import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
-import { SkyboxRenderer } from '../render-utils/skybox.js';
-import { TonemapRenderer } from '../render-utils/tonemap.js';
-import { RenderSet, RenderSetProvider } from '../render-utils/render-set.js';
-import { getForwardShader } from '../shaders/forward.js';
-import { BloomRenderer } from '../render-utils/bloom.js';
-import { SceneObject } from '../scene/node.js';
+
+import { RendererBase } from './renderer-base.js';
+
+import { RenderSet, RenderSetProvider } from './render-utils/render-set.js';
+import { BloomRenderer } from './render-utils/bloom.js';
+import { LightSpriteRenderer } from './render-utils/light-sprite.js';
+import { SkyboxRenderer } from './render-utils/skybox.js';
+import { TextureVisualizer } from './render-utils/texture-visualizer.js'
+import { TonemapRenderer } from './render-utils/tonemap.js';
+
+import { getGBufferShader, getLightingShader } from './shaders/deferred.js';
+import { getForwardShader } from './shaders/forward.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
 
 export enum DebugViewType {

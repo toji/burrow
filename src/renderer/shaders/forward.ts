@@ -1,9 +1,9 @@
 // @ts-ignore
 import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-preprocessor.js';
 
-import { GeometryLayout } from '../geometry/geometry-layout.js';
-import { AttributeLocation } from '../geometry/geometry.js';
-import { RenderMaterial } from '../material/material.js';
+import { GeometryLayout } from '../../geometry/geometry-layout.js';
+import { AttributeLocation } from '../../geometry/geometry.js';
+import { RenderMaterial } from '../../material/material.js';
 import { getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.js';
 import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 

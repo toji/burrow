@@ -42,8 +42,8 @@ export class PointLight extends SceneObject {
   }
 
   getRenderables(renderables: Renderables) {
+    super.getRenderables(renderables);
     if (!this.visible) { return; }
     renderables.pointLights.push(this);
-    return super.getRenderables(renderables);
   }
 }
