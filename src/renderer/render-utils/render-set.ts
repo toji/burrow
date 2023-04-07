@@ -1,6 +1,7 @@
 import { Mat4 } from "../../../third-party/gl-matrix/dist/src/index.js";
 import { GeometryLayout } from "../../geometry/geometry-layout.js";
 import { RenderGeometry } from "../../geometry/geometry.js";
+import { RenderSkin } from "../../geometry/skin.js";
 import { RenderMaterial } from "../../material/material.js";
 import { SceneMesh } from "../deferred-renderer.js";
 
@@ -8,6 +9,7 @@ const INITIAL_INSTANCE_COUNT = 1024;
 const INSTANCE_SIZE = 64;
 
 interface GeometryInstances {
+  skin?: RenderSkin,
   firstInstance: number,
   instanceCount: number,
   transforms: Mat4[],
@@ -62,18 +64,18 @@ export abstract class RenderSetProvider {
     });
   }
 
-  #getOrCreatePipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial): GPURenderPipeline {
-    const key = this.getKey(layout, material);
+  #getOrCreatePipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean): GPURenderPipeline {
+    const key = this.getKey(layout, material, skinned);
     let pipeline = this.#pipelineCache.get(key);
     if (pipeline) { return pipeline; }
 
-    pipeline = this.createPipeline(layout, material, key);
+    pipeline = this.createPipeline(layout, material, skinned, key);
     this.#pipelineCache.set(key, pipeline);
     return pipeline;
   }
 
-  getKey(layout: Readonly<GeometryLayout>, material: RenderMaterial): string {
-    return `${layout.id};${material.key}`;
+  getKey(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean): string {
+    return `${layout.id};${material.key};${skinned}`;
   }
 
   // Indicates whether a mesh should be included in render sets produced by this provider or not.
@@ -81,7 +83,7 @@ export abstract class RenderSetProvider {
     return true;
   }
 
-  abstract createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, key: string): GPURenderPipeline;
+  abstract createPipeline(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean, key: string): GPURenderPipeline;
 
   getRenderSet(meshes: SceneMesh[]): RenderSet {
     const renderSet: RenderSet = {
@@ -99,7 +101,7 @@ export abstract class RenderSetProvider {
       const material = mesh.material ?? this.defaultMaterial;
       const geometry = mesh.geometry;
 
-      const pipeline = this.#getOrCreatePipeline(geometry.layout, material);
+      const pipeline = this.#getOrCreatePipeline(geometry.layout, material, !!mesh.skin);
 
       let materialGeometries = renderSet.pipelineMaterials.get(pipeline);
       if (!materialGeometries) {
@@ -116,6 +118,7 @@ export abstract class RenderSetProvider {
       let instances = geometryInstances.get(geometry);
       if (!instances) {
         instances = {
+          skin: mesh.skin, // This probably doesn't make any sense.
           firstInstance: -1,
           instanceCount: -1,
           transforms: []

@@ -35,6 +35,21 @@ export const lightStruct = /* wgsl */`
   };
 `;
 
+export const skinningFunctions = /* wgsl */`
+  fn getSkinMatrix(joints: vec4u, weights: vec4f) -> mat4x4<f32> {
+    let joint0 = jointMat[joints.x] * invBindMat[joints.x];
+    let joint1 = jointMat[joints.y] * invBindMat[joints.y];
+    let joint2 = jointMat[joints.z] * invBindMat[joints.z];
+    let joint3 = jointMat[joints.w] * invBindMat[joints.w];
+
+    let skinMatrix = joint0 * weights.x +
+                     joint1 * weights.y +
+                     joint2 * weights.z +
+                     joint3 * weights.w;
+    return skinMatrix;
+  }
+`;
+
 export function pbrMaterialInputs(group: number) {
   return /* wgsl */`
     struct PbrMaterialUniforms {
@@ -55,7 +70,7 @@ export function pbrMaterialInputs(group: number) {
   `;
 }
 
-export function getCommonVertexShader(layout: Readonly<GeometryLayout>) {
+export function getCommonVertexShader(layout: Readonly<GeometryLayout>, skinned: boolean = false) {
   const locationsUsed = layout.locationsUsed;
 
   return wgsl`
@@ -79,6 +94,12 @@ export function getCommonVertexShader(layout: Readonly<GeometryLayout>) {
 #if ${locationsUsed.has(AttributeLocation.texcoord)}
       @location(${AttributeLocation.texcoord}) texcoord: vec2f,
 #endif
+#if ${locationsUsed.has(AttributeLocation.joints)}
+      @location(${AttributeLocation.joints}) joints: vec4u,
+#endif
+#if ${locationsUsed.has(AttributeLocation.weights)}
+      @location(${AttributeLocation.weights}) weights: vec4f,
+#endif
     };
 
     struct VertexOutput {
@@ -91,11 +112,22 @@ export function getCommonVertexShader(layout: Readonly<GeometryLayout>) {
       @location(5) texcoord : vec2f,
     };
 
+#if ${skinned}
+    @group(3) @binding(0) var<storage> invBindMat : array<mat4x4f>;
+    @group(3) @binding(1) var<storage> jointMat : array<mat4x4f>;
+
+    ${skinningFunctions}
+#endif
+
     @vertex
     fn vertexMain(input : VertexInput) -> VertexOutput {
       var output : VertexOutput;
 
+#if ${skinned}
+      let model = getSkinMatrix(input.joints, input.weights);
+#else
       let model = instanceMat[input.instance];
+#endif
 
       let worldPos = model * input.position;
       output.position = camera.projection * camera.view * worldPos;

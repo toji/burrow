@@ -1,5 +1,6 @@
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { RenderGeometry } from '../geometry/geometry.js';
+import { RenderSkin } from '../geometry/skin.js';
 import { RenderMaterial } from '../material/material.js';
 import { Renderables, SceneMesh } from '../renderer/deferred-renderer.js';
 import { SceneObject, SceneObjectInit } from './node.js';
@@ -9,19 +10,14 @@ export interface MeshGeometry {
   material: RenderMaterial,
 }
 
-export class MeshSkin {
-  inverseBindMatrices: Mat4[];
-  joints: SceneObject[];
-}
-
 export interface MeshInit extends SceneObjectInit {
   geometry?: MeshGeometry[];
-  skin?: MeshSkin;
+  skin?: RenderSkin;
 }
 
 export class Mesh extends SceneObject {
   geometry: MeshGeometry[];
-  skin: MeshSkin;
+  skin: RenderSkin;
 
   constructor(options: MeshInit) {
     super(options);
@@ -49,8 +45,8 @@ export class Mesh extends SceneObject {
     if (!this.visible) { return; }
     renderables.meshes.push(...this.geometry.map((geometry) => { return {
       ...geometry,
+      skin: this.skin,
       transform: this.worldMatrix
     }}));
-
   }
 }

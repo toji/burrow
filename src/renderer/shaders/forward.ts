@@ -7,12 +7,12 @@ import { RenderMaterial } from '../../material/material.js';
 import { getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.js';
 import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 
-export function getForwardShader(layout: Readonly<GeometryLayout>, material: RenderMaterial): string {
+export function getForwardShader(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean): string {
   const locationsUsed = layout.locationsUsed;
 
   if (material.unlit) {
     return wgsl`
-      ${getCommonVertexShader(layout)}
+      ${getCommonVertexShader(layout, skinned)}
 
       ${pbrMaterialInputs(/*@group*/ 2)}
 

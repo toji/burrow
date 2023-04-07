@@ -7,11 +7,11 @@ import { RenderMaterial } from '../../material/material.js';
 import { cameraStruct, getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.js';
 import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 
-export function getGBufferShader(layout: Readonly<GeometryLayout>, material: RenderMaterial): string {
+export function getGBufferShader(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean): string {
   const locationsUsed = layout.locationsUsed;
 
   return wgsl`
-    ${getCommonVertexShader(layout)}
+    ${getCommonVertexShader(layout, skinned)}
 
     ${pbrMaterialInputs(/*@group*/ 2)}
 

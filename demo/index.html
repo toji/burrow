@@ -48,6 +48,9 @@
       if (LOCAL_MODELS) {
         const GltfRootDir = './media/models';
         GltfModels = {
+          arena: `${GltfRootDir}/arena/scene.gltf`,
+          hell_arena: `${GltfRootDir}/hell_arena/scene.gltf`,
+          dragon: `${GltfRootDir}/dragon/scene.gltf`,
           boom_box: `${GltfRootDir}/BoomBox/glTF-Draco/BoomBox.gltf`,
           box_animated: `${GltfRootDir}/BoxAnimated/glTF/BoxAnimated.gltf`,
           damaged_helmet: `${GltfRootDir}/DamagedHelmet/glTF-Binary/DamagedHelmet.glb`,
@@ -83,12 +86,15 @@
 
       let modelPath = GltfModels.scifi_helmet;
 
+      const EnvRootDir = './media/environments';
       const EnvMaps = {
         none: null,
-        lightroom: './media/environments/lightroom_14b_ibl.ktx',
-        quattro_canti: './media/environments/quattro_canti_ibl.ktx',
-        industrial_pipe_and_valve: './media/environments/industrial_pipe_and_valve_ibl.ktx',
-        symmetrical_garden: './media/environments/symmetrical_garden_1k_ibl.ktx',
+        cape_hill: `${EnvRootDir}/cape_hill_ibl.ktx`,
+        industrial_pipe_and_valve: `${EnvRootDir}/industrial_pipe_and_valve_ibl.ktx`,
+        lightroom: `${EnvRootDir}/lightroom_14b_ibl.ktx`,
+        quattro_canti: `${EnvRootDir}/quattro_canti_ibl.ktx`,
+        symmetrical_garden: `${EnvRootDir}/symmetrical_garden_1k_ibl.ktx`,
+        zavelstein: `${EnvRootDir}/zavelstein_ibl.ktx`,
       };
       let envPath = EnvMaps.quattro_canti;
 
@@ -125,7 +131,8 @@
       });
       sceneRoot.addChild(scene);
 
-      let animations = [];
+      let animations = { none: null };
+      let selectedAnimation = null;
 
       function loadModel(path) {
         modelPath = path;
@@ -133,7 +140,21 @@
           sceneRoot.removeChild(scene);
           scene = result.scene;
           sceneRoot.addChild(scene);
-          animations = result.animations;
+          animations = { none: null };
+          if (result.animations.length) {
+            selectedAnimation = result.animations[0];
+
+            const options = [{text: 'none', value: null }];
+            for(const animation of result.animations) {
+              options.push({ text: animation.name, value: animation });
+            }
+            animationPane.options = options;
+            animationPane.value = selectedAnimation;
+            animationPane.hidden = false;
+          } else {
+            selectedAnimation = null;
+            animationPane.hidden = true;
+          }
         });
       }
       loadModel(modelPath);
@@ -166,6 +187,16 @@
         value: modelPath,
       }).on('change', (ev) => {
         loadModel(ev.value);
+      });
+
+      const animationPane = debugPane.addBlade({
+        label: 'animation',
+        view: 'list',
+        options: animations,
+        value: null,
+        hidden: true,
+      }).on('change', (ev) => {
+        selectedAnimation = ev.value;
       });
 
       debugPane.addBlade({
@@ -311,9 +342,8 @@
         const frameStart = performance.now();
         frameCount++;
 
-        if (animations.length) {
-          const animation = animations[0];
-          animation.applyAtTime(timestamp, scene.animationTarget);
+        if (selectedAnimation) {
+          selectedAnimation.applyAtTime(timestamp, scene.animationTarget);
         }
 
         updatePointLights(timestamp);

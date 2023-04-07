@@ -1,4 +1,5 @@
 import { resolveUri } from '../common/uri-utils.js';
+function alignTo4(value) { return Math.ceil(value / 4) * 4; }
 export class BufferManager {
     #buffers = [];
     #bufferViews = [];
@@ -55,7 +56,7 @@ export class BufferManager {
         json.buffers = [];
         json.bufferViews = [];
         await Promise.all(this.#bufferViews.map((bufferView) => bufferView.asByteArray()));
-        const totalBufferSize = this.#bufferViews.reduce((v, bufferView) => v + (bufferView?.byteLength ?? 0), 0);
+        const totalBufferSize = this.#bufferViews.reduce((v, bufferView) => v + (alignTo4(bufferView?.byteLength) ?? 0), 0);
         const combinedBuffer = new ArrayBuffer(totalBufferSize);
         const combinedByteArray = new Uint8Array(combinedBuffer);
         let byteOffset = 0;
@@ -64,7 +65,8 @@ export class BufferManager {
                 combinedByteArray.set(await bufferView.asByteArray(), byteOffset);
             }
             json.bufferViews.push(bufferView.toJson(byteOffset));
-            byteOffset += bufferView.byteLength;
+            // Round to the nearest multiple of 4 to ensure proper byte alignment for TypedArrays.
+            byteOffset += alignTo4(bufferView.byteLength);
         }
         cache.setMulti(gltf.extras.url, {
             json,
