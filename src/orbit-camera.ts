@@ -26,14 +26,21 @@ export class OrbitCamera {
   #registerElement: (value: HTMLElement) => void;
 
   constructor(element = null) {
-    let moving = false;
     let lastX: number;
     let lastY: number;
 
+    let eventCache = [];
+    let lastPinchDelta = -1;
     const downCallback = (event: PointerEvent) => {
-      if (event.isPrimary) {
-        moving = true;
+      const index = eventCache.findIndex(
+        (cachedEvent) => cachedEvent.pointerId === event.pointerId
+      );
+      if (index >= 0) {
+        eventCache[index] = event;
+      } else {
+        eventCache.push(event);
       }
+
       lastX = event.pageX;
       lastY = event.pageY;
     };
@@ -41,26 +48,54 @@ export class OrbitCamera {
       let xDelta: number;
       let yDelta: number;
 
+      // Pinch zoom gesture handling from:
+      // https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events/Pinch_zoom_gestures
+      const index = eventCache.findIndex(
+        (cachedEvent) => cachedEvent.pointerId === event.pointerId
+      );
+      eventCache[index] = event;
+
       if(document.pointerLockElement === this.#element) {
-          xDelta = event.movementX;
-          yDelta = event.movementY;
-          this.orbit(xDelta * 0.025, yDelta * 0.025);
-      } else if (moving) {
-          xDelta = event.pageX - lastX;
-          yDelta = event.pageY - lastY;
-          lastX = event.pageX;
-          lastY = event.pageY;
-          this.orbit(xDelta * 0.025, yDelta * 0.025);
+        xDelta = event.movementX;
+        yDelta = event.movementY;
+        this.orbit(xDelta * 0.025, yDelta * 0.025);
+      } else if (eventCache.length === 1) {
+        xDelta = event.pageX - lastX;
+        yDelta = event.pageY - lastY;
+        lastX = event.pageX;
+        lastY = event.pageY;
+        this.orbit(xDelta * 0.025, yDelta * 0.025);
+      } else if (eventCache.length === 2) {
+        // If two pointers are down, check for pinch gestures
+        // Calculate the distance between the two pointers
+        const pinchDelta = Math.abs(eventCache[0].clientX - eventCache[1].clientX);
+
+        if (lastPinchDelta > 0) {
+          zoomCamera((lastPinchDelta-pinchDelta) * 10);
+        }
+
+        // Cache the distance for the next move event
+        lastPinchDelta = pinchDelta;
       }
     };
     const upCallback = (event: PointerEvent) => {
-      if (event.isPrimary) {
-        moving = false;
+      // Remove the pointerId from the eventCache
+      const index = eventCache.findIndex(
+        (cachedEvent) => cachedEvent.pointerId === event.pointerId
+      );
+      eventCache.splice(index, 1);
+
+      if (eventCache.length < 2) {
+        lastPinchDelta = -1;
       }
     };
     const wheelCallback = (event: WheelEvent) => {
-      this.distance = this.#distance[2] + (-event.deltaY * this.distanceStep);
+      zoomCamera(-event.deltaY);
       event.preventDefault();
+    };
+
+    const zoomCamera = (delta: number) => {
+      this.distance = this.#distance[2] + (delta * this.distanceStep);
     };
 
     this.#registerElement = (value: HTMLElement) => {
@@ -68,6 +103,9 @@ export class OrbitCamera {
         this.#element.removeEventListener('pointerdown', downCallback);
         this.#element.removeEventListener('pointermove', moveCallback);
         this.#element.removeEventListener('pointerup', upCallback);
+        this.#element.removeEventListener('pointercancel', upCallback);
+        this.#element.removeEventListener('pointerout', upCallback);
+        this.#element.removeEventListener('pointerleave', upCallback);
         this.#element.removeEventListener('wheel', wheelCallback);
       }
 
@@ -76,6 +114,9 @@ export class OrbitCamera {
         this.#element.addEventListener('pointerdown', downCallback);
         this.#element.addEventListener('pointermove', moveCallback);
         this.#element.addEventListener('pointerup', upCallback);
+        this.#element.addEventListener('pointercancel', upCallback);
+        this.#element.addEventListener('pointerout', upCallback);
+        this.#element.addEventListener('pointerleave', upCallback);
         this.#element.addEventListener('wheel', wheelCallback);
       }
     }
