@@ -36,7 +36,7 @@ enum FormatId {
   snorm16x4,
   float16x2,
   float16x4,
-  float32, 
+  float32,
   float32x2,
   float32x3,
   float32x4,
@@ -65,6 +65,13 @@ for (let i = 0; i <= 0xFF; ++i) {
   HexToUint8[i.toString(16).padStart(2, '0')] = i;
 }
 
+export interface GeometryLocationDesciption {
+  bufferIndex: number,
+  arrayStride: number,
+  offset: number,
+  format: GPUVertexFormat,
+}
+
 export class GeometryLayout {
   id: number;
 
@@ -75,7 +82,7 @@ export class GeometryLayout {
   #serializedBuffer: ArrayBuffer;
   #serializedString: string;
   #locationsUsed: Set<number>;
-  #locationsFormats: Map<number, GPUVertexFormat>;
+  #locationsDesc: Map<number, GeometryLocationDesciption>;
 
   constructor(buffers: GPUVertexBufferLayout[],
               topology: GPUPrimitiveTopology,
@@ -100,16 +107,21 @@ export class GeometryLayout {
     return this.#locationsUsed;
   }
 
-  getLocationFormat(shaderLocation: number): GPUVertexFormat {
-    if (!this.#locationsFormats) {
-      this.#locationsFormats = new Map<number, GPUVertexFormat>();
-      for (const buffer of this.buffers) {
+  getLocationDesc(shaderLocation: number): GeometryLocationDesciption {
+    if (!this.#locationsDesc) {
+      this.#locationsDesc = new Map();
+      for (const [bufferIndex, buffer] of this.buffers.entries()) {
         for (const attrib of buffer.attributes) {
-          this.#locationsFormats.set(attrib.shaderLocation, attrib.format);
+          this.#locationsDesc.set(attrib.shaderLocation, {
+            bufferIndex,
+            arrayStride: buffer.arrayStride,
+            offset: attrib.offset,
+            format: attrib.format
+          });
         }
       }
     }
-    return this.#locationsFormats.get(shaderLocation);
+    return this.#locationsDesc.get(shaderLocation);
   }
 
   serializeToBuffer() {
