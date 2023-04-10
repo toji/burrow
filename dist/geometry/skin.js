@@ -1,21 +1,26 @@
 export class RenderSkin {
-    device;
+    renderer;
     bindGroup;
     joints;
+    invBindBuffer;
     jointBuffer;
     #jointArray;
-    constructor(device, bindGroup, joints, jointBuffer) {
-        this.device = device;
+    constructor(renderer, bindGroup, joints, invBindBuffer, jointBuffer) {
+        this.renderer = renderer;
         this.bindGroup = bindGroup;
         this.joints = joints;
+        this.invBindBuffer = invBindBuffer;
         this.jointBuffer = jointBuffer;
         this.#jointArray = new Float32Array(joints.length * 16);
     }
-    updateJoints() {
+    updateJoints(animationTarget) {
         for (const [index, joint] of this.joints.entries()) {
-            this.#jointArray.set(joint.worldMatrix, index * 16);
+            this.#jointArray.set(animationTarget.objects[joint].worldMatrix, index * 16);
         }
-        this.device.queue.writeBuffer(this.jointBuffer, 0, this.#jointArray);
+        this.renderer.device.queue.writeBuffer(this.jointBuffer, 0, this.#jointArray);
+    }
+    clone() {
+        return this.renderer.cloneSkin(this);
     }
 }
 //# sourceMappingURL=skin.js.map

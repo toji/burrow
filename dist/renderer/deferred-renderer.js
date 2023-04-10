@@ -451,7 +451,7 @@ export class DeferredRenderer extends RendererBase {
         for (const mesh of renderables.meshes) {
             // TODO: A single skin COULD be used for multiple meshes, which would make this redundant.
             if (mesh.skin) {
-                mesh.skin.updateJoints();
+                mesh.skin.skin.updateJoints(mesh.skin.animationTarget);
             }
         }
         // Compile renderable list out of scene meshes.

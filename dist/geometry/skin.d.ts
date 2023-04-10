@@ -1,16 +1,19 @@
 /// <reference types="dist" />
 import { Mat4 } from "../../third-party/gl-matrix/dist/src/index.js";
-import { SceneObject } from "../scene/node.js";
+import { AnimationTarget } from "../animation/animation.js";
+import { RendererBase } from "../renderer/renderer-base.js";
 export interface SkinDescriptor {
     inverseBindMatrices: Mat4[] | Float32Array;
-    joints: SceneObject[];
+    joints: number[];
 }
 export declare class RenderSkin {
     #private;
-    device: GPUDevice;
+    renderer: RendererBase;
     bindGroup: GPUBindGroup;
-    joints: SceneObject[];
+    joints: number[];
+    invBindBuffer: GPUBuffer;
     jointBuffer: GPUBuffer;
-    constructor(device: GPUDevice, bindGroup: GPUBindGroup, joints: SceneObject[], jointBuffer: GPUBuffer);
-    updateJoints(): void;
+    constructor(renderer: RendererBase, bindGroup: GPUBindGroup, joints: number[], invBindBuffer: GPUBuffer, jointBuffer: GPUBuffer);
+    updateJoints(animationTarget: AnimationTarget): void;
+    clone(): RenderSkin;
 }

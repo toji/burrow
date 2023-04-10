@@ -12,6 +12,7 @@ import { TextureVisualizer } from './render-utils/texture-visualizer.js';
 import { TonemapRenderer } from './render-utils/tonemap.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
 import { RenderSkin } from '../geometry/skin.js';
+import { AnimationTarget } from '../animation/animation.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -31,7 +32,10 @@ export interface SceneMesh {
     transform: Mat4;
     geometry: RenderGeometry;
     material?: RenderMaterial;
-    skin?: RenderSkin;
+    skin?: {
+        skin: RenderSkin;
+        animationTarget: AnimationTarget;
+    };
 }
 export interface Renderables {
     meshes: SceneMesh[];

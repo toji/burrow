@@ -82,7 +82,7 @@ export class RenderSetProvider {
             let instances = geometryInstances.get(geometry);
             if (!instances) {
                 instances = {
-                    skin: mesh.skin,
+                    skin: mesh.skin?.skin,
                     firstInstance: -1,
                     instanceCount: -1,
                     transforms: []

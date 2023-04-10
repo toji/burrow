@@ -15,4 +15,5 @@ export declare class RendererBase {
     createGeometry(desc: GeometryDescriptor): RenderGeometry;
     createMaterial(desc: PbrMaterialDescriptor): RenderMaterial;
     createSkin(desc: SkinDescriptor): RenderSkin;
+    cloneSkin(skin: RenderSkin): RenderSkin;
 }

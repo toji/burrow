@@ -14,6 +14,7 @@ export class Mesh extends SceneObject {
             label: this.label,
             transform: this.transform.copy(),
             geometry: this.geometry,
+            skin: this.skin?.clone(),
         });
         this.copyChildren(object);
         return object;
@@ -26,7 +27,7 @@ export class Mesh extends SceneObject {
         renderables.meshes.push(...this.geometry.map((geometry) => {
             return {
                 ...geometry,
-                skin: this.skin,
+                skin: this.skin ? { skin: this.skin, animationTarget: this.animationTarget } : undefined,
                 transform: this.worldMatrix
             };
         }));

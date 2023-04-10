@@ -1,4 +1,5 @@
 import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { AnimationTarget } from '../animation/animation.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { RenderSkin } from '../geometry/skin.js';
 import { RenderMaterial } from '../material/material.js';
@@ -33,6 +34,7 @@ export class Mesh extends SceneObject {
       label: this.label,
       transform: this.transform.copy(),
       geometry: this.geometry,
+      skin: this.skin?.clone(),
     });
 
     this.copyChildren(object);
@@ -43,9 +45,10 @@ export class Mesh extends SceneObject {
   getRenderables(renderables: Renderables) {
     super.getRenderables(renderables);
     if (!this.visible) { return; }
+
     renderables.meshes.push(...this.geometry.map((geometry) => { return {
       ...geometry,
-      skin: this.skin,
+      skin: this.skin ? { skin: this.skin, animationTarget: this.animationTarget } : undefined,
       transform: this.worldMatrix
     }}));
   }

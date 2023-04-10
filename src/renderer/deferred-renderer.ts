@@ -16,6 +16,7 @@ import { getGBufferShader, getLightingShader } from './shaders/deferred.js';
 import { getForwardShader } from './shaders/forward.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
 import { RenderSkin } from '../geometry/skin.js';
+import { AnimationTarget } from '../animation/animation.js';
 
 export enum DebugViewType {
   none = "none",
@@ -42,7 +43,7 @@ export interface SceneMesh {
   transform: Mat4;
   geometry: RenderGeometry,
   material?: RenderMaterial,
-  skin?: RenderSkin,
+  skin?: { skin: RenderSkin, animationTarget: AnimationTarget },
 }
 
 export interface Renderables {
@@ -540,7 +541,7 @@ export class DeferredRenderer extends RendererBase {
     for (const mesh of renderables.meshes) {
       // TODO: A single skin COULD be used for multiple meshes, which would make this redundant.
       if (mesh.skin) {
-        mesh.skin.updateJoints();
+        mesh.skin.skin.updateJoints(mesh.skin.animationTarget);
       }
     }
 
