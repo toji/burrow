@@ -237,6 +237,23 @@ export class GltfLoader {
       }
     }
 
+    //-------
+    // Skins
+    //-------
+    const skins = [];
+    if (gltf.skins) {
+      for (const skin of (gltf.skins as any[])) {
+        // TODO: May not have an inverseBindMatrices, if so should fill with identity matrices.
+        const invBindMatrixAccessor = gltf.accessors[skin.inverseBindMatrices];
+        const inverseBindMatrices = getAccessorTypedArray(invBindMatrixAccessor) as Float32Array;
+
+        skins.push(this.renderer.createSkin({
+          inverseBindMatrices,
+          joints: skin.joints
+        }));
+      }
+    }
+
     //-----------
     // Nodes
     //-----------
@@ -256,19 +273,9 @@ export class GltfLoader {
       }
 
       if (node.mesh !== undefined) {
-        const meshPrimitives = meshes[node.mesh];
-        /*for (const primitive of meshPrimitives) {
-          const transform = new Mat4(sceneTransform);
-          transform.multiply(node.extras.worldMatrix);
-          renderScene.meshes.push({
-            ...primitive,
-            transform
-          });
-        }*/
-
         sceneNodes.push(new Mesh({
           transform,
-          geometry: meshes[node.mesh]
+          geometry: meshes[node.mesh],
         }));
       } else {
         sceneNodes.push(new SceneObject({
@@ -277,42 +284,21 @@ export class GltfLoader {
       }
     }
 
-    //-------
-    // Skins
-    //-------
-    const skins = [];
-    if (gltf.skins) {
-      for (const skin of (gltf.skins as any[])) {
-        // TODO: May not have an inverseBindMatrices, if so should fill with identity matrices.
-        const invBindMatrixAccessor = gltf.accessors[skin.inverseBindMatrices];
-        const inverseBindMatrices = getAccessorTypedArray(invBindMatrixAccessor) as Float32Array;
-
-        const joints: SceneObject[] = [];
-        for (const jointIndex of skin.joints) {
-          joints.push(sceneNodes[jointIndex]);
-        }
-
-        // TODO: Need to make this clone-able
-        skins.push(this.renderer.createSkin({
-          inverseBindMatrices,
-          joints,
-        }));
-      }
-    }
+    const animationTarget = new AnimationTarget(sceneNodes);
 
     // Second pass over the nodes to build the tree.
     for (const [index, node] of (gltf.nodes as any[]).entries()) {
       const sceneNode = sceneNodes[index];
       if (node.skin !== undefined) {
-        (sceneNode as Mesh).skin = skins[node.skin];
+        const mesh = (sceneNode as Mesh);
+        mesh.skin = skins[node.skin];
+        mesh.animationTarget = animationTarget;
       }
       if (!node.children) { continue; }
       for (const child of node.children) {
         sceneNode.addChild(sceneNodes[child]);
       }
     }
-
-
 
     // @ts-ignore
     const scene = gltf.scenes[gltf.scene];
@@ -339,7 +325,6 @@ export class GltfLoader {
       sceneRoot.addChild(sceneNodes[nodeIndex]);
     }
 
-    const animationTarget = new AnimationTarget(sceneNodes);
     sceneRoot.animationTarget = animationTarget;
 
     return {

@@ -81,6 +81,28 @@ export class RendererBase {
       }]
     });
 
-    return new RenderSkin(this.device, skinBindGroup, desc.joints, jointBuffer);
+    return new RenderSkin(this, skinBindGroup, desc.joints, invBindBuffer, jointBuffer);
+  }
+
+  cloneSkin(skin: RenderSkin): RenderSkin {
+    const jointBuffer = this.device.createBuffer({
+      label: 'skin joint buffer',
+      size: skin.joints.length * 16 * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
+    const skinBindGroup = this.device.createBindGroup({
+      label: 'skin bind group',
+      layout: this.skinBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer: skin.invBindBuffer },
+      }, {
+        binding: 1,
+        resource: { buffer: jointBuffer },
+      }]
+    });
+
+    return new RenderSkin(this, skinBindGroup, skin.joints, skin.invBindBuffer, jointBuffer);
   }
 }

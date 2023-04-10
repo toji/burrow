@@ -118,7 +118,7 @@ export abstract class RenderSetProvider {
       let instances = geometryInstances.get(geometry);
       if (!instances) {
         instances = {
-          skin: mesh.skin, // This probably doesn't make any sense.
+          skin: mesh.skin?.skin, // This probably doesn't make any sense.
           firstInstance: -1,
           instanceCount: -1,
           transforms: []
