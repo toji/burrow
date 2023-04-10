@@ -17,6 +17,7 @@ import { getForwardShader } from './shaders/forward.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
 import { RenderSkin } from '../geometry/skin.js';
 import { AnimationTarget } from '../animation/animation.js';
+import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 
 export enum DebugViewType {
   none = "none",
@@ -38,6 +39,8 @@ interface Camera {
 // To prevent per-frame allocations.
 const invViewProjection = new Mat4();
 const cameraArray = new Float32Array(64);
+
+const IDENTITY_MATRIX = new Mat4();
 
 export interface SceneMesh {
   transform: Mat4;
@@ -226,6 +229,7 @@ export class DeferredRenderer extends RendererBase {
   skyboxRenderer: SkyboxRenderer;
   tonemapRenderer: TonemapRenderer;
   bloomRenderer: BloomRenderer;
+  computeSkinner: ComputeSkinningManager;
 
   defaultMaterial: RenderMaterial;
 
@@ -295,6 +299,7 @@ export class DeferredRenderer extends RendererBase {
     this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
     this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
     this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
+    this.computeSkinner = new ComputeSkinningManager(this);
 
     this.defaultMaterial = this.createMaterial({
       label: 'Default Material',
@@ -538,11 +543,27 @@ export class DeferredRenderer extends RendererBase {
     this.updateCamera(camera);
     this.renderLightManager.updateLights(renderables);
 
+    const skinnedMeshes: SceneMesh[] = [];
     for (const mesh of renderables.meshes) {
       // TODO: A single skin COULD be used for multiple meshes, which would make this redundant.
       if (mesh.skin) {
+        skinnedMeshes.push(mesh);
         mesh.skin.skin.updateJoints(mesh.skin.animationTarget);
       }
+    }
+
+    if (skinnedMeshes) {
+      const encoder = this.device.createCommandEncoder();
+      const computePass = encoder.beginComputePass({});
+
+      for (const mesh of skinnedMeshes) {
+        mesh.transform = IDENTITY_MATRIX;
+        mesh.geometry = this.computeSkinner.skinGeometry(computePass, mesh.geometry, mesh.skin.skin);
+        mesh.skin = null;
+      }
+
+      computePass.end();
+      this.device.queue.submit([encoder.finish()]);
     }
 
     // Compile renderable list out of scene meshes.

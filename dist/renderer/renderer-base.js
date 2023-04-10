@@ -18,11 +18,11 @@ export class RendererBase {
             entries: [{
                     binding: 0,
                     buffer: { type: 'read-only-storage' },
-                    visibility: GPUShaderStage.VERTEX
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE
                 }, {
                     binding: 1,
                     buffer: { type: 'read-only-storage' },
-                    visibility: GPUShaderStage.VERTEX
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE
                 }]
         });
     }

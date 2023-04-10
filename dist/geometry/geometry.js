@@ -17,11 +17,13 @@ export var AttributeLocation;
 ;
 export class RenderGeometry {
     drawCount;
+    vertexCount;
     vertexBuffers;
     layout;
     indexBuffer;
-    constructor(drawCount, vertexBuffers, layout, indexBuffer) {
+    constructor(drawCount, vertexCount, vertexBuffers, layout, indexBuffer) {
         this.drawCount = drawCount;
+        this.vertexCount = vertexCount;
         this.vertexBuffers = vertexBuffers;
         this.layout = layout;
         this.indexBuffer = indexBuffer;

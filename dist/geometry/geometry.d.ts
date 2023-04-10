@@ -52,8 +52,9 @@ export interface IndexBufferBinding {
 }
 export declare class RenderGeometry {
     drawCount: number;
+    vertexCount: number;
     vertexBuffers: VertexBufferBinding[];
     layout: Readonly<GeometryLayout>;
     indexBuffer?: IndexBufferBinding;
-    constructor(drawCount: number, vertexBuffers: VertexBufferBinding[], layout: Readonly<GeometryLayout>, indexBuffer?: IndexBufferBinding);
+    constructor(drawCount: number, vertexCount: number, vertexBuffers: VertexBufferBinding[], layout: Readonly<GeometryLayout>, indexBuffer?: IndexBufferBinding);
 }

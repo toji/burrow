@@ -13,6 +13,7 @@ import { TonemapRenderer } from './render-utils/tonemap.js';
 import { DirectionalLight, PointLight } from '../scene/light.js';
 import { RenderSkin } from '../geometry/skin.js';
 import { AnimationTarget } from '../animation/animation.js';
+import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -81,6 +82,7 @@ export declare class DeferredRenderer extends RendererBase {
     skyboxRenderer: SkyboxRenderer;
     tonemapRenderer: TonemapRenderer;
     bloomRenderer: BloomRenderer;
+    computeSkinner: ComputeSkinningManager;
     defaultMaterial: RenderMaterial;
     deferredRenderSetProvider: DeferredRenderSetProvider;
     forwardRenderSetProvider: ForwardRenderSetProvider;

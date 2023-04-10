@@ -71,6 +71,7 @@ export interface IndexBufferBinding {
 export class RenderGeometry {
   constructor(
     public drawCount: number,
+    public vertexCount: number,
     public vertexBuffers: VertexBufferBinding[],
     public layout: Readonly<GeometryLayout>,
     public indexBuffer?: IndexBufferBinding,

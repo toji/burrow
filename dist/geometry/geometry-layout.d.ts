@@ -1,4 +1,10 @@
 /// <reference types="dist" />
+export interface GeometryLocationDesciption {
+    bufferIndex: number;
+    arrayStride: number;
+    offset: number;
+    format: GPUVertexFormat;
+}
 export declare class GeometryLayout {
     #private;
     id: number;
@@ -7,7 +13,7 @@ export declare class GeometryLayout {
     stripIndexFormat?: GPUIndexFormat;
     constructor(buffers: GPUVertexBufferLayout[], topology: GPUPrimitiveTopology, indexFormat?: GPUIndexFormat);
     get locationsUsed(): Set<number>;
-    getLocationFormat(shaderLocation: number): GPUVertexFormat;
+    getLocationDesc(shaderLocation: number): GeometryLocationDesciption;
     serializeToBuffer(): ArrayBuffer;
     serializeToString(): string;
     static deserializeFromBuffer(inBuffer: ArrayBuffer, bufferOffest?: number, bufferLength?: number): GeometryLayout;

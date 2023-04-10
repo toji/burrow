@@ -3,7 +3,7 @@ import { SetDefaults } from '../set-defaults.js';
 const GL = WebGLRenderingContext;
 function gpuBufferUsageForTarget(target) {
     switch (target) {
-        case GL.ARRAY_BUFFER: return GPUBufferUsage.VERTEX;
+        case GL.ARRAY_BUFFER: return GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE;
         case GL.ELEMENT_ARRAY_BUFFER: return GPUBufferUsage.INDEX;
     }
 }

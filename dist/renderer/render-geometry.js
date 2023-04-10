@@ -12,7 +12,7 @@ var DefaultAttributeFormat;
     DefaultAttributeFormat["weights"] = "float32x4";
 })(DefaultAttributeFormat || (DefaultAttributeFormat = {}));
 ;
-const DefaultStride = {
+export const DefaultStride = {
     uint8x2: 2,
     uint8x4: 4,
     sint8x2: 2,
@@ -109,6 +109,10 @@ export class RenderGeometryManager {
         const device = this.device;
         // Vertex buffer processing
         let maxVertices = Number.MAX_SAFE_INTEGER;
+        let skinned = desc.weights && desc.joints;
+        let usage = skinned ?
+            GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST :
+            GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
         const vertexBuffers = [];
         const attribValuesToBufferLayout = new Map();
         function createBufferLayoutForValues(values, arrayStride, attribName) {
@@ -134,7 +138,7 @@ export class RenderGeometryManager {
                 buffer = device.createBuffer({
                     label: `${desc.label} ${attribName} Vertex Buffer`,
                     size: nextMultipleOf(vertexArray.byteLength, 4),
-                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    usage,
                 });
                 device.queue.writeBuffer(buffer, 0, vertexArray);
             }
@@ -249,7 +253,7 @@ export class RenderGeometryManager {
             }
         }
         const geometryLayout = this.#geometryLayoutCache.createLayout(bufferLayouts, desc.topology ?? 'triangle-list', indexBinding?.indexFormat);
-        return new RenderGeometry(drawCount, vertexBindings, geometryLayout, indexBinding);
+        return new RenderGeometry(drawCount, maxVertices, vertexBindings, geometryLayout, indexBinding);
     }
     ;
 }

@@ -74,7 +74,7 @@ export class GeometryLayout {
     #serializedBuffer;
     #serializedString;
     #locationsUsed;
-    #locationsFormats;
+    #locationsDesc;
     constructor(buffers, topology, indexFormat = 'uint32') {
         this.buffers = buffers;
         this.topology = topology;
@@ -93,16 +93,21 @@ export class GeometryLayout {
         }
         return this.#locationsUsed;
     }
-    getLocationFormat(shaderLocation) {
-        if (!this.#locationsFormats) {
-            this.#locationsFormats = new Map();
-            for (const buffer of this.buffers) {
+    getLocationDesc(shaderLocation) {
+        if (!this.#locationsDesc) {
+            this.#locationsDesc = new Map();
+            for (const [bufferIndex, buffer] of this.buffers.entries()) {
                 for (const attrib of buffer.attributes) {
-                    this.#locationsFormats.set(attrib.shaderLocation, attrib.format);
+                    this.#locationsDesc.set(attrib.shaderLocation, {
+                        bufferIndex,
+                        arrayStride: buffer.arrayStride,
+                        offset: attrib.offset,
+                        format: attrib.format
+                    });
                 }
             }
         }
-        return this.#locationsFormats.get(shaderLocation);
+        return this.#locationsDesc.get(shaderLocation);
     }
     serializeToBuffer() {
         if (this.#serializedBuffer) {

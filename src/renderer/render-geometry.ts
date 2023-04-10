@@ -12,7 +12,7 @@ enum DefaultAttributeFormat {
   weights = 'float32x4',
 };
 
-const DefaultStride = {
+export const DefaultStride = {
   uint8x2: 2,
   uint8x4: 4,
   sint8x2: 2,
@@ -123,6 +123,11 @@ export class RenderGeometryManager {
     // Vertex buffer processing
     let maxVertices = Number.MAX_SAFE_INTEGER;
 
+    let skinned = desc.weights && desc.joints;
+    let usage = skinned ?
+                GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST :
+                GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
+
     const vertexBuffers: GPUBuffer[] = [];
     const attribValuesToBufferLayout = new Map<GeometryValues, GeometryBufferLayout>();
     function createBufferLayoutForValues(values: GeometryValues, arrayStride: number, attribName: string): GeometryBufferLayout {
@@ -145,7 +150,7 @@ export class RenderGeometryManager {
         buffer = device.createBuffer({
           label: `${desc.label} ${attribName} Vertex Buffer`,
           size: nextMultipleOf(vertexArray.byteLength, 4),
-          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+          usage,
         });
         device.queue.writeBuffer(buffer, 0, vertexArray);
       }
@@ -272,6 +277,7 @@ export class RenderGeometryManager {
 
     return new RenderGeometry(
       drawCount,
+      maxVertices,
       vertexBindings,
       geometryLayout,
       indexBinding
