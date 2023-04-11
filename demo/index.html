@@ -27,6 +27,13 @@
         margin: 0;
         touch-action: none;
       }
+
+      b {
+        color: white;
+        display: block;
+        padding: 0.5em;
+        text-align: center;
+      }
     </style>
 
     <script defer src="https://web3dsurvey.com/collector.js"></script>
@@ -44,6 +51,13 @@
       import { SceneObject, Transform } from '../dist/scene/object.js';
       import { Mesh } from '../dist/scene/mesh.js';
       import { PointLight } from '../dist/scene/light.js';
+
+      if (!navigator.gpu) {
+        const errorMessage = document.createElement('b');
+        errorMessage.innerText = 'WebGPU not supported on this browser';
+        document.body.appendChild(errorMessage);
+        throw new Error('WebGPU not supported.');
+      }
 
       const LOCAL_MODELS = true;
       let GltfModels;
