@@ -6,11 +6,12 @@ A toy WebGPU deferred renderer built on my WIP hoard-gpu asset loading library.
 
  - Deferred rendering with WebGPU!
     - Bloom: Not great, but there!
+    - Compute skinning: Because it was fun.
     - Antialising support: No
     - Transparency support: ~~Also no~~ Now yes!
     - Anything approaching a useful abstraction layer: Nope!
  - glTF loading
-    - Animations: No
+    - Animations: Yes, badly!
     - Most extensions: No
     - Basis and Draco compression: Surprisingly, yes!
  - Point lights and Image based lights
