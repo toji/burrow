@@ -1,4 +1,4 @@
-import { SceneObject } from '../scene/node.js';
+import { SceneObject } from '../scene/object.js';
 export declare abstract class AnimationSampler {
     times: number[];
     values: any[];

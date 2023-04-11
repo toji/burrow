@@ -167,4 +167,4 @@ export class SceneObject {
         }
     }
 }
-//# sourceMappingURL=node.js.map
+//# sourceMappingURL=object.js.map

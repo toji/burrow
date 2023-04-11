@@ -1,10 +1,8 @@
-import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { AnimationTarget } from '../animation/animation.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { RenderSkin } from '../geometry/skin.js';
 import { RenderMaterial } from '../material/material.js';
 import { Renderables, SceneMesh } from '../renderer/deferred-renderer.js';
-import { SceneObject, SceneObjectInit } from './node.js';
+import { SceneObject, SceneObjectInit } from './object.js';
 
 export interface MeshGeometry {
   geometry: RenderGeometry,

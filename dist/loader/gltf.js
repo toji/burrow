@@ -1,5 +1,5 @@
 import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { SceneObject, MatrixTransform, Transform } from '../scene/node.js';
+import { SceneObject, MatrixTransform, Transform } from '../scene/object.js';
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';
 import { WebGpuGltfLoader } from '../../third-party/hoard-gpu/dist/gltf/webgpu-gltf-loader.js';
@@ -60,7 +60,7 @@ export class GltfLoader {
     #hoardLoader;
     constructor(renderer) {
         this.renderer = renderer;
-        this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB]);
+        this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB], { additionalBufferUsageFlags: GPUBufferUsage.STORAGE });
     }
     get textureLoader() {
         return this.#hoardLoader.textureLoader;

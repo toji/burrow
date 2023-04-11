@@ -1,5 +1,5 @@
 import { Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
-import { SceneObject } from './node.js';
+import { SceneObject } from './object.js';
 export class PointLight extends SceneObject {
     range;
     color;

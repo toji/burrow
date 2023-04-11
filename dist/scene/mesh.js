@@ -1,4 +1,4 @@
-import { SceneObject } from './node.js';
+import { SceneObject } from './object.js';
 export class Mesh extends SceneObject {
     geometry;
     skin;

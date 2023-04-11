@@ -10,7 +10,6 @@ const SKINNING_SHADER = /*wgsl*/ `
   };
   @group(0) @binding(0) var<storage, read_write> outVerts : array<SkinnedVertexOutputs>;
 
-
   // TODO: These should come from a uniform
   const positionStride = 3;
   const normalStride = 3;
@@ -36,6 +35,7 @@ const SKINNING_SHADER = /*wgsl*/ `
     let normal = vec4f(inNormal[i * normalStride], inNormal[i * normalStride + 1], inNormal[i * normalStride + 2], 0);
     let tangent = vec4f(inTangent[i * tangentStride], inTangent[i * tangentStride + 1], inTangent[i * tangentStride + 2], inTangent[i * tangentStride + 3]);
 
+    // TODO: What if the joints are 16 bit values instead of 8?
     let packedJoints = inJoints[i * jointStride];
     let joint0 = (packedJoints & 0xFF);
     let joint1 = (packedJoints & 0xFF00) >> 8;

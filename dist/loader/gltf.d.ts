@@ -1,5 +1,5 @@
 import { DeferredRenderer } from '../renderer/deferred-renderer.js';
-import { SceneObject } from '../scene/node.js';
+import { SceneObject } from '../scene/object.js';
 import { Animation } from '../animation/animation.js';
 import { WebGpuTextureLoader } from '../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js';
 export interface GltfResult {

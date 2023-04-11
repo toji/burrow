@@ -3,12 +3,17 @@ import { SetDefaults } from '../set-defaults.js';
 const GL = WebGLRenderingContext;
 function gpuBufferUsageForTarget(target) {
     switch (target) {
-        case GL.ARRAY_BUFFER: return GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE;
+        case GL.ARRAY_BUFFER: return GPUBufferUsage.VERTEX;
         case GL.ELEMENT_ARRAY_BUFFER: return GPUBufferUsage.INDEX;
     }
 }
 export class CreateWebGpuBuffers extends WebGpuGltfTransform {
     static Dependencies = [SetDefaults];
+    additionalUsageFlags;
+    constructor(loaderOptions) {
+        super(loaderOptions);
+        this.additionalUsageFlags = loaderOptions.additionalBufferUsageFlags ?? 0;
+    }
     transform(gltf, buffers, images) {
         // Create WebGPU buffers for every bufferView that contains vertex or index data.
         const promises = [];
@@ -20,7 +25,7 @@ export class CreateWebGpuBuffers extends WebGpuGltfTransform {
                 label: bufferView.name,
                 // Round the buffer size up to the nearest multiple of 4.
                 size: Math.ceil(bufferView.byteLength / 4) * 4,
-                usage: gpuBufferUsageForTarget(bufferView.target),
+                usage: gpuBufferUsageForTarget(bufferView.target) | this.additionalUsageFlags,
                 mappedAtCreation: true,
             });
             this.setGpuExtras(bufferView, { buffer: gpuBuffer });
