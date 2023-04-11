@@ -1,59 +1,100 @@
+// @ts-ignore
+import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-preprocessor.js';
 import { AttributeLocation } from "../../geometry/geometry.js";
 import { DefaultStride } from "../render-geometry.js";
 import { skinningFunctions } from "../shaders/common.js";
 const WORKGROUP_SIZE = 64;
-const SKINNING_SHADER = /*wgsl*/ `
+function getSkinningShader(layout) {
+    const is16BitJoints = layout.getLocationDesc(AttributeLocation.joints).format === 'uint16x4';
+    return wgsl `
   struct SkinnedVertexOutputs {
     position: vec4f,
+#if ${layout.locationsUsed.has(AttributeLocation.normal)}
     normal: vec4f,
+#endif
+#if ${layout.locationsUsed.has(AttributeLocation.tangent)}
     tangent: vec4f,
+#endif
   };
   @group(0) @binding(0) var<storage, read_write> outVerts : array<SkinnedVertexOutputs>;
 
   // TODO: These should come from a uniform
-  const positionStride = 3;
-  const normalStride = 3;
-  const tangentStride = 4;
-  const jointStride = 1;
-  const weightStride = 4;
+  override jointStride: u32 = 1;
+  override weightStride: u32 = 4;
+  override positionStride: u32 = 3;
+  override normalStride: u32 = 3;
+  override tangentStride: u32 = 4;
 
-  @group(0) @binding(1) var<storage> inPosition : array<f32>;
-  @group(0) @binding(2) var<storage> inNormal : array<f32>;
-  @group(0) @binding(3) var<storage> inTangent : array<f32>;
-  @group(0) @binding(4) var<storage> inJoints : array<u32>;
-  @group(0) @binding(5) var<storage> inWeights : array<f32>;
+  struct OffsetValues {
+    vertexCount: u32,
+    joint: u32,
+    weight: u32,
+    position: u32,
+    normal: u32,
+    tangent: u32
+  };
+
+  @group(0) @binding(1) var<uniform> offsets: OffsetValues;
+
+  @group(0) @binding(2) var<storage> inJoints: array<u32>;
+  @group(0) @binding(3) var<storage> inWeights: array<f32>;
+  @group(0) @binding(4) var<storage> inPosition: array<f32>;
+#if ${layout.locationsUsed.has(AttributeLocation.normal)}
+  @group(0) @binding(5) var<storage> inNormal: array<f32>;
+#endif
+#if ${layout.locationsUsed.has(AttributeLocation.tangent)}
+  @group(0) @binding(6) var<storage> inTangent: array<f32>;
+#endif
+  
 
   ${skinningFunctions}
-  @group(1) @binding(0) var<storage> invBindMat : array<mat4x4f>;
-  @group(1) @binding(1) var<storage> jointMat : array<mat4x4f>;
+  @group(1) @binding(0) var<storage> invBindMat: array<mat4x4f>;
+  @group(1) @binding(1) var<storage> jointMat: array<mat4x4f>;
 
   @compute @workgroup_size(64)
   fn computeMain(@builtin(global_invocation_id) globalId : vec3u) {
     let i = globalId.x;
+    if (i >= offsets.vertexCount) { return; }
 
-    let pos = vec4f(inPosition[i * positionStride], inPosition[i * positionStride + 1], inPosition[i * positionStride + 2], 1);
-    let normal = vec4f(inNormal[i * normalStride], inNormal[i * normalStride + 1], inNormal[i * normalStride + 2], 0);
-    let tangent = vec4f(inTangent[i * tangentStride], inTangent[i * tangentStride + 1], inTangent[i * tangentStride + 2], inTangent[i * tangentStride + 3]);
-
-    // TODO: What if the joints are 16 bit values instead of 8?
-    let packedJoints = inJoints[i * jointStride];
+#if ${is16BitJoints}
+    let packedJoints0 = inJoints[i * jointStride + offsets.joint];
+    let joint0 = (packedJoints0 & 0xFFFF);
+    let joint1 = (packedJoints0 & 0xFFFF0000) >> 16;
+    let packedJoints1 = inJoints[i * jointStride + offsets.joint + 1];
+    let joint2 = (packedJoints1 & 0xFFFF);
+    let joint3 = (packedJoints1 & 0xFFFF0000) >> 16;
+#else
+    let packedJoints = inJoints[i * jointStride + offsets.joint];
     let joint0 = (packedJoints & 0xFF);
     let joint1 = (packedJoints & 0xFF00) >> 8;
     let joint2 = (packedJoints & 0xFF0000) >> 16;
     let joint3 = (packedJoints & 0xFF000000) >> 24;
+#endif
     let joints = vec4u(joint0, joint1, joint2, joint3);
-    let weights = vec4f(inWeights[i * weightStride], inWeights[i * weightStride + 1], inWeights[i * weightStride + 2], inWeights[i * weightStride + 3]);
 
-    //outVerts[i].position = pos;
-    outVerts[i].normal = normal;
-    outVerts[i].tangent = tangent;
+    let wo = i * weightStride + offsets.weight;
+    let weights = vec4f(inWeights[wo], inWeights[wo + 1], inWeights[wo + 2], inWeights[wo + 3]);
 
     let skinMatrix = getSkinMatrix(joints, weights);
+
+    let po = i * positionStride + offsets.position;
+    let pos = vec4f(inPosition[po], inPosition[po + 1], inPosition[po + 2], 1);
     outVerts[i].position = vec4f((skinMatrix * pos).xyz, 1);
+
+#if ${layout.locationsUsed.has(AttributeLocation.normal)}
+    let no = i * normalStride + offsets.normal;
+    let normal = vec4f(inNormal[no], inNormal[no + 1], inNormal[no + 2], 0);
     outVerts[i].normal = vec4f(normalize((skinMatrix * normal).xyz), 0);
+#endif
+
+#if ${layout.locationsUsed.has(AttributeLocation.tangent)}
+    let to = i * tangentStride + offsets.tangent;
+    let tangent = vec4f(inTangent[to], inTangent[to + 1], inTangent[to + 2], inTangent[to + 3]);
     outVerts[i].tangent = vec4(normalize((skinMatrix * vec4f(tangent.xyz, 1)).xyz), tangent.w);
+#endif
   }
 `;
+}
 function getAttributeSize(desc) {
     if (!desc) {
         return 0;
@@ -62,20 +103,22 @@ function getAttributeSize(desc) {
 }
 export class ComputeSkinningManager {
     renderer;
-    #bindGroupLayout;
     #skinnedGeometry = new WeakMap();
     #skinningPipelines = new Map();
     constructor(renderer) {
         this.renderer = renderer;
-        this.#bindGroupLayout = renderer.device.createBindGroupLayout({
-            label: 'compute skinning bind group layout',
-            entries: [{
+    }
+    #getSkinningPipeline(layout) {
+        const key = layout.id;
+        let pipeline = this.#skinningPipelines.get(key);
+        if (!pipeline) {
+            const entries = [{
                     binding: 0,
                     buffer: { type: 'storage' },
                     visibility: GPUShaderStage.COMPUTE
                 }, {
                     binding: 1,
-                    buffer: { type: 'read-only-storage' },
+                    buffer: {},
                     visibility: GPUShaderStage.COMPUTE
                 }, {
                     binding: 2,
@@ -89,30 +132,53 @@ export class ComputeSkinningManager {
                     binding: 4,
                     buffer: { type: 'read-only-storage' },
                     visibility: GPUShaderStage.COMPUTE
-                }, {
+                }];
+            const getStride = (location) => {
+                const desc = layout.getLocationDesc(location);
+                if (!desc) {
+                    return 0;
+                }
+                return desc.arrayStride / 4;
+            };
+            const constants = {
+                jointStride: getStride(AttributeLocation.joints),
+                weightStride: getStride(AttributeLocation.weights),
+                positionStride: getStride(AttributeLocation.position),
+            };
+            if (layout.locationsUsed.has(AttributeLocation.normal)) {
+                entries.push({
                     binding: 5,
                     buffer: { type: 'read-only-storage' },
                     visibility: GPUShaderStage.COMPUTE
-                }]
-        });
-    }
-    #getSkinningPipeline(inputGeometry) {
-        const key = inputGeometry.layout.id;
-        let pipeline = this.#skinningPipelines.get(key);
-        if (!pipeline) {
+                });
+                constants.normalStride = getStride(AttributeLocation.normal);
+            }
+            if (layout.locationsUsed.has(AttributeLocation.tangent)) {
+                entries.push({
+                    binding: 6,
+                    buffer: { type: 'read-only-storage' },
+                    visibility: GPUShaderStage.COMPUTE
+                });
+                constants.tangentStride = getStride(AttributeLocation.tangent);
+            }
+            const bindGroupLayout = this.renderer.device.createBindGroupLayout({
+                label: 'compute skinning bind group layout',
+                entries
+            });
             const module = this.renderer.device.createShaderModule({
                 label: `compute skinning shader module (layout: ${key})`,
-                code: SKINNING_SHADER
+                code: getSkinningShader(layout)
             });
             pipeline = this.renderer.device.createComputePipeline({
                 label: `compute skinning pipeline (layout: ${key})`,
                 layout: this.renderer.device.createPipelineLayout({ bindGroupLayouts: [
-                        this.#bindGroupLayout,
+                        bindGroupLayout,
                         this.renderer.skinBindGroupLayout,
                     ] }),
                 compute: {
                     module,
                     entryPoint: 'computeMain',
+                    constants,
                 }
             });
             this.#skinningPipelines.set(key, pipeline);
@@ -122,7 +188,9 @@ export class ComputeSkinningManager {
     #getSkinnedGeometry(geometry) {
         let skinned = this.#skinnedGeometry.get(geometry);
         if (!skinned) {
-            let skinnedVertexSize = 48;
+            const hasNormal = geometry.layout.locationsUsed.has(AttributeLocation.normal);
+            const hasTangent = geometry.layout.locationsUsed.has(AttributeLocation.tangent);
+            const skinnedVertexSize = 16 + (hasNormal ? 16 : 0) + (hasTangent ? 16 : 0);
             let skinnedBuffer = this.renderer.device.createBuffer({
                 size: skinnedVertexSize * geometry.vertexCount,
                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
@@ -133,13 +201,13 @@ export class ComputeSkinningManager {
                 topology: geometry.layout.topology
             };
             let skinnedOffset = 16;
-            if (geometry.layout.locationsUsed.has(AttributeLocation.normal)) {
+            if (hasNormal) {
                 skinnedGeometryDesc.normal = {
                     values: skinnedBuffer, offset: skinnedOffset, stride: skinnedVertexSize
                 };
                 skinnedOffset += 16;
             }
-            if (geometry.layout.locationsUsed.has(AttributeLocation.tangent)) {
+            if (hasTangent) {
                 skinnedGeometryDesc.tangent = {
                     values: skinnedBuffer, offset: skinnedOffset, stride: skinnedVertexSize
                 };
@@ -147,11 +215,11 @@ export class ComputeSkinningManager {
             }
             for (let location of geometry.layout.locationsUsed) {
                 switch (location) {
+                    case AttributeLocation.joints:
+                    case AttributeLocation.weights:
                     case AttributeLocation.position:
                     case AttributeLocation.normal:
                     case AttributeLocation.tangent:
-                    case AttributeLocation.weights:
-                    case AttributeLocation.joints:
                         continue;
                     default: {
                         const desc = geometry.layout.getLocationDesc(location);
@@ -173,39 +241,62 @@ export class ComputeSkinningManager {
                 };
             }
             const renderGeometry = this.renderer.createGeometry(skinnedGeometryDesc);
-            const pipeline = this.#getSkinningPipeline(geometry);
-            const positionDesc = geometry.layout.getLocationDesc(AttributeLocation.position);
-            const normalDesc = geometry.layout.getLocationDesc(AttributeLocation.normal);
-            const tangentDesc = geometry.layout.getLocationDesc(AttributeLocation.tangent);
+            const pipeline = this.#getSkinningPipeline(geometry.layout);
             const jointDesc = geometry.layout.getLocationDesc(AttributeLocation.joints);
             const weightDesc = geometry.layout.getLocationDesc(AttributeLocation.weights);
-            const positionBuffer = geometry.vertexBuffers[positionDesc.bufferIndex];
-            const normalBuffer = geometry.vertexBuffers[normalDesc.bufferIndex];
-            const tangentBuffer = geometry.vertexBuffers[tangentDesc.bufferIndex];
+            const positionDesc = geometry.layout.getLocationDesc(AttributeLocation.position);
             const jointBuffer = geometry.vertexBuffers[jointDesc.bufferIndex];
             const weightBuffer = geometry.vertexBuffers[weightDesc.bufferIndex];
+            const positionBuffer = geometry.vertexBuffers[positionDesc.bufferIndex];
+            let uniformBuffer = this.renderer.device.createBuffer({
+                size: 32,
+                usage: GPUBufferUsage.UNIFORM,
+                mappedAtCreation: true,
+            });
+            const uniformArray = new Uint32Array(uniformBuffer.getMappedRange());
+            uniformArray[0] = geometry.vertexCount;
+            uniformArray[1] = (jointDesc.offset + jointBuffer.offset) / 4;
+            uniformArray[2] = (weightDesc.offset + weightBuffer.offset) / 4;
+            uniformArray[3] = (positionDesc.offset + positionBuffer.offset) / 4;
+            const entries = [{
+                    binding: 0,
+                    resource: { buffer: skinnedBuffer }
+                }, {
+                    binding: 1,
+                    resource: { buffer: uniformBuffer }
+                }, {
+                    binding: 2,
+                    resource: { buffer: jointBuffer.buffer }
+                }, {
+                    binding: 3,
+                    resource: { buffer: weightBuffer.buffer }
+                }, {
+                    binding: 4,
+                    resource: { buffer: positionBuffer.buffer }
+                }];
+            if (hasNormal) {
+                const normalDesc = geometry.layout.getLocationDesc(AttributeLocation.normal);
+                const normalBuffer = geometry.vertexBuffers[normalDesc.bufferIndex];
+                uniformArray[4] = (normalDesc.offset + normalBuffer.offset) / 4;
+                entries.push({
+                    binding: 5,
+                    resource: { buffer: normalBuffer.buffer }
+                });
+            }
+            if (hasTangent) {
+                const tangentDesc = geometry.layout.getLocationDesc(AttributeLocation.tangent);
+                const tangentBuffer = geometry.vertexBuffers[tangentDesc.bufferIndex];
+                uniformArray[5] = (tangentDesc.offset + tangentBuffer.offset) / 4;
+                entries.push({
+                    binding: 6,
+                    resource: { buffer: tangentBuffer.buffer }
+                });
+            }
+            uniformBuffer.unmap();
             const bindGroup = this.renderer.device.createBindGroup({
                 label: 'compute skinning bind group',
                 layout: pipeline.getBindGroupLayout(0),
-                entries: [{
-                        binding: 0,
-                        resource: { buffer: skinnedBuffer }
-                    }, {
-                        binding: 1,
-                        resource: { buffer: positionBuffer.buffer, offset: positionDesc.offset + positionBuffer.offset }
-                    }, {
-                        binding: 2,
-                        resource: { buffer: normalBuffer.buffer, offset: normalDesc.offset + normalBuffer.offset }
-                    }, {
-                        binding: 3,
-                        resource: { buffer: tangentBuffer.buffer, offset: tangentDesc.offset + tangentBuffer.offset }
-                    }, {
-                        binding: 4,
-                        resource: { buffer: jointBuffer.buffer, offset: jointDesc.offset + jointBuffer.offset }
-                    }, {
-                        binding: 5,
-                        resource: { buffer: weightBuffer.buffer, offset: weightDesc.offset + weightBuffer.offset }
-                    }]
+                entries
             });
             skinned = {
                 geometry: renderGeometry,
