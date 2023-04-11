@@ -32,30 +32,22 @@ const lightSpriteShader = /*wgsl*/`
     output.color = (*light).color * (*light).intensity;
     let worldPos = vec3f(output.localPos, 0) * (*light).range * 0.025;
 
-    // Generate a billboarded model view  matrix
-    var bbModelViewMatrix : mat4x4<f32>;
-    bbModelViewMatrix[3] = vec4((*light).position, 1.0);
+    // Generate a billboarded model view matrix
+    var bbModelViewMatrix : mat4x4f;
+    bbModelViewMatrix[3] = vec4f((*light).position, 1);
     bbModelViewMatrix = camera.view * bbModelViewMatrix;
-    bbModelViewMatrix[0][0] = 1.0;
-    bbModelViewMatrix[0][1] = 0.0;
-    bbModelViewMatrix[0][2] = 0.0;
+    bbModelViewMatrix[0] = vec4f(1, 0, 0, bbModelViewMatrix[0].w);
+    bbModelViewMatrix[1] = vec4f(0, 1, 0, bbModelViewMatrix[1].w);
+    bbModelViewMatrix[2] = vec4f(0, 0, 1, bbModelViewMatrix[2].w);
 
-    bbModelViewMatrix[1][0] = 0.0;
-    bbModelViewMatrix[1][1] = 1.0;
-    bbModelViewMatrix[1][2] = 0.0;
-
-    bbModelViewMatrix[2][0] = 0.0;
-    bbModelViewMatrix[2][1] = 0.0;
-    bbModelViewMatrix[2][2] = 1.0;
-
-    output.position = camera.projection * bbModelViewMatrix * vec4f(worldPos, 1.0);
+    output.position = camera.projection * bbModelViewMatrix * vec4f(worldPos, 1);
     return output;
   }
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     let distToCenter = length(input.localPos);
-    let fade = (1.0 - distToCenter) * (1.0 / (distToCenter * distToCenter));
+    let fade = (1 - distToCenter) * (1 / (distToCenter * distToCenter));
     return vec4f(input.color * fade, fade);
   }
 `;
