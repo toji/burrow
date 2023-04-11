@@ -1,7 +1,7 @@
 import { Mat4, Quat, Vec3, Vec3Like } from '../../third-party/gl-matrix/dist/src/index.js';
 import { QuatLike } from '../../third-party/gl-matrix/dist/src/quat.js';
 import { AnimationTarget } from '../animation/animation.js';
-import { Renderables, SceneMesh } from '../renderer/deferred-renderer.js';
+import { Renderables } from '../renderer/deferred-renderer.js';
 
 export interface AbstractTransform {
   dirty: boolean;

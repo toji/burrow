@@ -1,6 +1,6 @@
 import { Vec3, Vec3Like } from '../../third-party/gl-matrix/dist/src/index.js';
 import { Renderables } from '../renderer/deferred-renderer.js';
-import { SceneObject, SceneObjectInit } from './node.js';
+import { SceneObject, SceneObjectInit } from './object.js';
 
 export interface DirectionalLight {
   direction: Vec3Like;

@@ -2,7 +2,7 @@ import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
 import { DeferredRenderer } from '../renderer/deferred-renderer.js';
-import { SceneObject, AbstractTransform, MatrixTransform, Transform } from '../scene/node.js';
+import { SceneObject, AbstractTransform, MatrixTransform, Transform } from '../scene/object.js';
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationSampler, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';
 
@@ -76,7 +76,7 @@ export class GltfLoader {
   #hoardLoader: WebGpuGltfLoader;
 
   constructor(public renderer: DeferredRenderer) {
-    this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB]);
+    this.#hoardLoader = new WebGpuGltfLoader(renderer.device, [ComputeAABB], { additionalBufferUsageFlags: GPUBufferUsage.STORAGE });
   }
 
   get textureLoader(): WebGpuTextureLoader {
