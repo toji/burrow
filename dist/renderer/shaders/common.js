@@ -44,6 +44,24 @@ export const skinningFunctions = /* wgsl */ `
     return skinMatrix;
   }
 `;
+export const ditherFunctions = /* wgsl */ `
+  const bayer_n = 4u;
+  const bayer_matrix_4x4 = mat4x4f(
+      -0.5,       0,  -0.375,   0.125,
+      0.25,   -0.25,   0.375,  -0.125,
+    -0.3125,  0.1875, -0.4375,  0.0625,
+    0.4375, -0.0625,  0.3125, -0.1875
+  );
+
+  fn dither(value: f32, pixelCoord: vec2u) -> f32 {
+    let r = 1.0;
+    var d = value + (r * bayer_matrix_4x4[pixelCoord.y % bayer_n][pixelCoord.x % bayer_n]);
+
+    d = d * 0.99 + 0.05;
+
+    return select(0.0, 1.0, d > 0.5);
+  }
+`;
 export function pbrMaterialInputs(group) {
     return /* wgsl */ `
     struct PbrMaterialUniforms {

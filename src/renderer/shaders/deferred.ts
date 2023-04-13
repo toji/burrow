@@ -4,11 +4,13 @@ import { wgsl } from 'https://cdn.jsdelivr.net/npm/wgsl-preprocessor@1.0/wgsl-pr
 import { GeometryLayout } from '../../geometry/geometry-layout.js';
 import { AttributeLocation } from '../../geometry/geometry.js';
 import { RenderMaterial } from '../../material/material.js';
-import { cameraStruct, getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.js';
+import { cameraStruct, ditherFunctions, getCommonVertexShader, lightStruct, pbrMaterialInputs } from './common.js';
 import { PbrFunctions, surfaceInfoStruct } from './pbr.js';
 
 export function getGBufferShader(layout: Readonly<GeometryLayout>, material: RenderMaterial, skinned: boolean): string {
   const locationsUsed = layout.locationsUsed;
+
+  const ditheredAlpha = false;
 
   return wgsl`
     ${getCommonVertexShader(layout, skinned)}
@@ -24,6 +26,10 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>, material: Ren
 
     const lightAmbient = vec3f(0.01);
 
+#if ${ditheredAlpha}
+    ${ditherFunctions}
+#endif
+
     @fragment
     fn fragmentMain(input : VertexOutput) -> FragmentOutput {
       var out: FragmentOutput;
@@ -32,6 +38,11 @@ export function getGBufferShader(layout: Readonly<GeometryLayout>, material: Ren
 
 #if ${material.discard}
       if (baseColor.a < material.alphaCutoff) {
+        discard;
+      }
+#elseif ${ditheredAlpha}
+      let ditheredAlpha = dither(baseColor.a, vec2u(input.position.xy));
+      if (ditheredAlpha < 1) {
         discard;
       }
 #endif

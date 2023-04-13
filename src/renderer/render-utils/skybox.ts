@@ -20,7 +20,9 @@ const SKYBOX_SHADER = /*wgsl*/`
     // Returning the W component for both Z and W forces the geometry depth to
     // the far plane. When combined with a depth func of "less-equal" this makes
     // the sky write to any depth fragment that has not been written to yet.
-    output.position = output.position.xyww;
+    output.position = vec4f(output.position.xyw, output.position.w + 0.0001);
+    // Should be this, but adding the epsilon to work around an Android bug
+    //output.position = output.position.xyww;
     output.texcoord = position.xyz;
 
     return output;

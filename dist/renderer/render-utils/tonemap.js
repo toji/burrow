@@ -1,5 +1,5 @@
 export const toneMappingShader = /* wgsl */ `
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
+  const pos = array<vec2f, 3>(
     vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
 
   @vertex
