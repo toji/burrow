@@ -1,0 +1,44 @@
+{
+  "version": "4.0.0-beta.1",
+  "name": "gl-matrix",
+  "description": "Javascript Matrix and Vector library for High Performance 3D web apps",
+  "sideEffects": false,
+  "type": "module",
+  "types": "./dist/esm/index.d.ts",
+  "homepage": "http://glmatrix.net",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/toji/gl-matrix/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toji/gl-matrix.git"
+  },
+  "contributors": [
+    {
+      "name": "Brandon Jones",
+      "email": "tojiro@gmail.com"
+    },
+    {
+      "name": "Colin MacKenzie IV",
+      "email": "sinisterchipmunk@gmail.com"
+    }
+  ],
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build-docs": "typedoc src/index.ts",
+    "bundle": "node scripts/bundle.mjs",
+    "build-all": "npm run build && npm run build-docs && npm run bundle",
+    "watch": "tsc --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "^0.15.15",
+    "typedoc": "^0.23.21",
+    "typescript": "^4.9.3",
+    "vitest": "^0.25.2"
+  }
+}

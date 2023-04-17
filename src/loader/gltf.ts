@@ -1,4 +1,4 @@
-import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { GeometryDescriptor } from '../geometry/geometry.js';
 import { RenderMaterial } from '../material/material.js';
 import { DeferredRenderer } from '../renderer/deferred-renderer.js';

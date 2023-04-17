@@ -1,5 +1,5 @@
 /// <reference types="dist" />
-import { Mat4 } from "../../third-party/gl-matrix/dist/src/index.js";
+import { Mat4 } from "../../node_modules/gl-matrix/dist/esm/index.js";
 import { AnimationTarget } from "../animation/animation.js";
 import { RendererBase } from "../renderer/renderer-base.js";
 export interface SkinDescriptor {

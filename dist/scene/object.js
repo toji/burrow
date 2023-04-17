@@ -1,4 +1,4 @@
-import { Mat4, Quat, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Quat, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 const DEFAULT_TRANSLATION = new Vec3();
 const DEFAULT_ROTATION = new Quat(0, 0, 0, 1);
 const DEFAULT_SCALE = new Vec3(1, 1, 1);

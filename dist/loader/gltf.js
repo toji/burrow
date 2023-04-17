@@ -1,4 +1,4 @@
-import { Mat4, Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { SceneObject, MatrixTransform, Transform } from '../scene/object.js';
 import { Mesh } from '../scene/mesh.js';
 import { Animation, AnimationChannel, AnimationTarget, LinearAnimationSampler, SphericalLinearAnimationSampler, StepAnimationSampler } from '../animation/animation.js';

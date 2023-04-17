@@ -1,5 +1,5 @@
 /// <reference types="dist" />
-import { Mat4 } from "../../../third-party/gl-matrix/dist/src/index.js";
+import { Mat4 } from "../../../node_modules/gl-matrix/dist/esm/index.js";
 import { GeometryLayout } from "../../geometry/geometry-layout.js";
 import { RenderGeometry } from "../../geometry/geometry.js";
 import { RenderSkin } from "../../geometry/skin.js";

@@ -1,4 +1,4 @@
-import { Vec4, Vec3, Vec2 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Vec4, Vec3, Vec2 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { RenderMaterial } from '../material/material.js';
 // Can reuse these for every PBR material
 const MATERIAL_BUFFER_SIZE = 48;

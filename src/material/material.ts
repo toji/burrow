@@ -1,4 +1,4 @@
-import { Vec3Like, Vec4Like } from "../../third-party/gl-matrix/dist/src/index.js";
+import { Vec3Like, Vec4Like } from "../../node_modules/gl-matrix/dist/esm/index.js";
 
 export interface PbrMaterialDescriptor {
   label?: string;

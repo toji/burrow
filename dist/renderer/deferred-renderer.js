@@ -1,4 +1,4 @@
-import { Mat4 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Mat4 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { RendererBase } from './renderer-base.js';
 import { RenderSetProvider } from './render-utils/render-set.js';
 import { BloomRenderer } from './render-utils/bloom.js';

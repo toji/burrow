@@ -1,4 +1,4 @@
-import { Vec3 } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { SceneObject } from './object.js';
 export class PointLight extends SceneObject {
     range;
