@@ -1,4 +1,4 @@
-import { Vec4, Quat } from '../../third-party/gl-matrix/dist/src/index.js';
+import { Vec4, Quat } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { SceneObject } from '../scene/object.js';
 
 const tmpOut0 = new Vec4(4);
