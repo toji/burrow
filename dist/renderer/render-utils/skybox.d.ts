@@ -4,6 +4,6 @@ export declare class SkyboxRenderer {
     pipeline: GPURenderPipeline;
     skyboxVertexBuffer: GPUBuffer;
     skyboxIndexBuffer: GPUBuffer;
-    constructor(device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout);
+    constructor(device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout, depthFormat: GPUTextureFormat);
     render(renderPass: GPURenderPassEncoder): void;
 }

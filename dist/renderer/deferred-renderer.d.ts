@@ -66,6 +66,7 @@ export declare class DeferredRenderer extends RendererBase {
     metalRoughTexture: GPUTexture;
     lightTexture: GPUTexture;
     depthTexture: GPUTexture;
+    depthFormat: GPUTextureFormat;
     colorAttachments: GPURenderPassColorAttachment[];
     lightAttachments: GPURenderPassColorAttachment[];
     depthAttachment: GPURenderPassDepthStencilAttachment;

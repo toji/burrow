@@ -1,4 +1,4 @@
-import { Mat4, Vec3 } from '../node_modules/gl-matrix/dist/esm/index.js';
+import { Mat4, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
 export class OrbitCamera {
     orbitX = 0;
     orbitY = 0;

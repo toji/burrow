@@ -70,7 +70,7 @@ class DeferredRenderSetProvider extends RenderSetProvider {
                 stripIndexFormat: layout.stripIndexFormat
             },
             depthStencil: {
-                format: 'depth16unorm',
+                format: this.renderer.depthFormat,
                 depthWriteEnabled: true,
                 depthCompare: 'less',
             },
@@ -119,6 +119,21 @@ class ForwardRenderSetProvider extends RenderSetProvider {
             label: `forward shader module (key ${key})`,
             code: getForwardShader(layout, material, skinned),
         });
+        let depthCompare = 'less';
+        let blend = undefined;
+        if (material.transparent) {
+            depthCompare = 'less-equal';
+            blend = {
+                color: {
+                    srcFactor: 'src-alpha',
+                    dstFactor: 'one-minus-src-alpha',
+                },
+                alpha: {
+                    srcFactor: 'one',
+                    dstFactor: 'zero',
+                }
+            };
+        }
         return this.device.createRenderPipeline({
             label: `forward render pipeline (key ${key})`,
             layout: skinned ? this.skinnedPipelineLayout : this.pipelineLayout,
@@ -133,25 +148,16 @@ class ForwardRenderSetProvider extends RenderSetProvider {
                 stripIndexFormat: layout.stripIndexFormat
             },
             depthStencil: {
-                format: 'depth16unorm',
+                format: this.renderer.depthFormat,
                 depthWriteEnabled: true,
-                depthCompare: 'less',
+                depthCompare,
             },
             fragment: {
                 module,
                 entryPoint: 'fragmentMain',
                 targets: [{
                         format: 'rgb10a2unorm',
-                        blend: {
-                            color: {
-                                srcFactor: 'src-alpha',
-                                dstFactor: 'one-minus-src-alpha',
-                            },
-                            alpha: {
-                                srcFactor: 'one',
-                                dstFactor: 'zero',
-                            }
-                        }
+                        blend
                     }],
             },
         });
@@ -164,6 +170,7 @@ export class DeferredRenderer extends RendererBase {
     metalRoughTexture;
     lightTexture;
     depthTexture;
+    depthFormat = 'depth24plus';
     colorAttachments;
     lightAttachments;
     depthAttachment;
@@ -236,8 +243,8 @@ export class DeferredRenderer extends RendererBase {
         });
         // Prime the lighting pipeline
         this.getLightingPipeline();
-        this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout);
-        this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout);
+        this.lightSpriteRenderer = new LightSpriteRenderer(device, this.frameBindGroupLayout, this.depthFormat);
+        this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout, this.depthFormat);
         this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
         this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
         this.computeSkinner = new ComputeSkinningManager(this);
@@ -283,7 +290,7 @@ export class DeferredRenderer extends RendererBase {
             // Textures are already a compatible size!
             return;
         }
-        this.projection.perspectiveZO(Math.PI * 0.5, width / height, 0.1, 20);
+        this.projection.perspectiveZO(Math.PI * 0.5, width / height, 0.1, 50);
         // Recreate all the attachments.
         const size = this.attachmentSize = { width, height };
         const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
@@ -312,7 +319,7 @@ export class DeferredRenderer extends RendererBase {
         this.depthTexture = this.device.createTexture({
             label: 'depth deferred texture',
             size, usage,
-            format: 'depth16unorm', // Render cost: 2
+            format: this.depthFormat, // Render cost: 2 - 4
         });
         // Rebuild the render pass inputs
         this.colorAttachments = [{
@@ -368,12 +375,12 @@ export class DeferredRenderer extends RendererBase {
     getLightingPipeline() {
         const key = (this.environment ? 0x01 : 0) |
             (this.renderLightManager.pointLightCount > 0 ? 0x02 : 0) |
-            0; // Directional Lights
+            (this.renderLightManager.directionalIntensity > 0 ? 0x04 : 0); // Directional Lights
         let pipeline = this.lightingPipelines.get(key);
         if (!pipeline) {
             const module = this.device.createShaderModule({
                 label: `lighting shader module ${key}`,
-                code: getLightingShader(!!this.environment, this.renderLightManager.pointLightCount > 0, false),
+                code: getLightingShader(!!this.environment, this.renderLightManager.pointLightCount > 0, this.renderLightManager.directionalIntensity > 0),
             });
             pipeline = this.device.createRenderPipeline({
                 label: `lighting render pipeline ${key}`,
@@ -385,7 +392,7 @@ export class DeferredRenderer extends RendererBase {
                 depthStencil: {
                     depthCompare: 'always',
                     depthWriteEnabled: false,
-                    format: 'depth16unorm',
+                    format: this.depthFormat,
                 },
                 fragment: {
                     module,

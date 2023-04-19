@@ -53,7 +53,7 @@ const lightSpriteShader = /*wgsl*/ `
 export class LightSpriteRenderer {
     device;
     pipeline;
-    constructor(device, frameBindGroupLayout) {
+    constructor(device, frameBindGroupLayout, depthFormat) {
         this.device = device;
         const shaderModule = device.createShaderModule({
             label: 'light sprite shader',
@@ -96,7 +96,7 @@ export class LightSpriteRenderer {
             depthStencil: {
                 depthWriteEnabled: false,
                 depthCompare: 'less',
-                format: 'depth16unorm',
+                format: depthFormat,
             }
         });
     }

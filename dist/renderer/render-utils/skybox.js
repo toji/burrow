@@ -71,7 +71,7 @@ export class SkyboxRenderer {
     pipeline;
     skyboxVertexBuffer;
     skyboxIndexBuffer;
-    constructor(device, frameBindGroupLayout) {
+    constructor(device, frameBindGroupLayout, depthFormat) {
         this.device = device;
         const shaderModule = device.createShaderModule({
             label: 'skybox shader',
@@ -118,7 +118,7 @@ export class SkyboxRenderer {
             depthStencil: {
                 depthWriteEnabled: false,
                 depthCompare: 'less-equal',
-                format: 'depth16unorm',
+                format: depthFormat,
             }
         });
         this.skyboxVertexBuffer = device.createBuffer({

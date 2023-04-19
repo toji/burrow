@@ -5,6 +5,7 @@ export declare class RenderLightManager {
     lightBuffer: GPUBuffer;
     lightArrayBuffer: ArrayBuffer;
     pointLightCount: number;
+    directionalIntensity: number;
     environment: GPUTexture;
     defaultEnvironment: GPUTexture;
     environmentSampler: GPUSampler;

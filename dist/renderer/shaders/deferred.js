@@ -34,7 +34,7 @@ export function getGBufferShader(layout, material, skinned) {
       if (baseColor.a < material.alphaCutoff) {
         discard;
       }
-#elseif ${ditheredAlpha}
+#elif ${ditheredAlpha}
       let ditheredAlpha = dither(baseColor.a, vec2u(input.position.xy));
       if (ditheredAlpha < 1) {
         discard;
@@ -58,7 +58,8 @@ export function getGBufferShader(layout, material, skinned) {
 
       // Emissive gets output directly to the light accumulation texture
       let emissive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
-      out.light = vec4f((input.color * lightAmbient) + emissive, 1);
+
+      out.light = vec4f((input.color * baseColor.rgb * occlusion * lightAmbient) + emissive, 1);
 
       return out;
     }
