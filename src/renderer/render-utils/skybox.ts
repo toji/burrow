@@ -81,7 +81,7 @@ export class SkyboxRenderer {
   skyboxVertexBuffer: GPUBuffer;
   skyboxIndexBuffer: GPUBuffer;
 
-  constructor(public device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout) {
+  constructor(public device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout, depthFormat: GPUTextureFormat) {
     const shaderModule = device.createShaderModule({
       label: 'skybox shader',
       code: SKYBOX_SHADER,
@@ -129,7 +129,7 @@ export class SkyboxRenderer {
       depthStencil: {
         depthWriteEnabled: false,
         depthCompare: 'less-equal',
-        format: 'depth16unorm',
+        format: depthFormat,
       }
     });
 

@@ -45,7 +45,8 @@
 
       import { DeferredRenderer, DebugViewType } from '../dist/renderer/deferred-renderer.js';
       import { GltfLoader } from '../dist/loader/gltf.js';
-      import { OrbitCamera } from '../dist/orbit-camera.js';
+      import { OrbitCamera } from '../dist/camera/orbit-camera.js';
+      import { FlyingCamera } from '../dist/camera/flying-camera.js';
       import { CubeGeometryDesc } from './cube.js';
       import { SceneObject, Transform } from '../dist/scene/object.js';
       import { Mesh } from '../dist/scene/mesh.js';
@@ -96,6 +97,7 @@
           toy_car: `${GltfRootDir}/ToyCar/glTF-Binary/ToyCar.glb`,
           unlit_test: `${GltfRootDir}/UnlitTest/glTF/UnlitTest.gltf`,
           water_bottle: `${GltfRootDir}/WaterBottle/glTF-Binary/WaterBottle.glb`,
+          sponza_intel: `../../sponza-optimized/Intel/NewSponzaOptimized-ktx-draco.glb`,
         };
       }
 
@@ -191,7 +193,7 @@
       }
       loadEnv(envPath);
 
-      const camera = new OrbitCamera(canvas);
+      let camera = new OrbitCamera(canvas);
       camera.distance = 3;
 
       // Debug panel
@@ -237,6 +239,21 @@
         renderer.debugView = ev.value;
       });
 
+      const appState = {
+        freeCamera: false,
+      };
+
+      debugPane.addInput(appState, 'freeCamera', {
+        label: 'free camera',
+      }).on('change', (ev) => {
+        if (ev.value) {
+          camera = new FlyingCamera(canvas);
+        } else {
+          camera = new OrbitCamera(canvas);
+          camera.distance = 3;
+        }
+      });
+
       debugPane.addButton({
         label: 'Cache',
         title: 'Clear',
@@ -258,6 +275,11 @@
         pointLightCount: pointLightColors.length,
         pointLights: [],
         animateLights: true,
+        directional: {
+          direction: {x: 0.5, y: 1, z: 0.25},
+          color: {r: 1, g: 1, b: 0.8},
+          intensity: 5,
+        }
       };
 
       for (const color of pointLightColors) {
@@ -314,14 +336,37 @@
         hidden: !renderer.enableBloom
       });
 
-      lightsFolder.addInput(lightState, 'pointLightCount', {
-        label: 'lightCount',
+      const pointLightFolder = lightsFolder.addFolder({
+        title: 'Point Lights',
+        expanded: true,
+      });
+
+      pointLightFolder.addInput(lightState, 'pointLightCount', {
+        label: 'count',
         step: 1,
         min: 0,
         max: pointLightColors.length,
       });
-      lightsFolder.addInput(lightState, 'animateLights', {
+      pointLightFolder.addInput(lightState, 'animateLights', {
         label: 'animate',
+      });
+
+      const dirLightFolder = lightsFolder.addFolder({
+        title: 'Directional Light',
+        expanded: true,
+      });
+
+      dirLightFolder.addInput(lightState.directional, 'direction', {
+      });
+
+      dirLightFolder.addInput(lightState.directional, 'color', {
+        color: {type: 'float'},
+      });
+
+      dirLightFolder.addInput(lightState.directional, 'intensity', {
+        step: 0.25,
+        min: 0,
+        max: 10,
       });
 
       const stats = {
@@ -371,6 +416,11 @@
         const renderables = {
           meshes: [],
           pointLights: [],
+          directionalLight: {
+            direction: [lightState.directional.direction.x, lightState.directional.direction.y, lightState.directional.direction.z],
+            color: [lightState.directional.color.r, lightState.directional.color.g, lightState.directional.color.b],
+            intensity: lightState.directional.intensity
+          }
         };
         sceneRoot.getRenderables(renderables); // TODO: This navigates the tree every frame == slow.
 

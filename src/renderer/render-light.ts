@@ -5,6 +5,7 @@ const DIRECTIONAL_LIGHT_STRUCT_SIZE = 32;
 const POINT_LIGHT_STRUCT_SIZE = 32;
 const LIGHT_BUFFER_SIZE = DIRECTIONAL_LIGHT_STRUCT_SIZE + (MAX_POINT_LIGHTS * POINT_LIGHT_STRUCT_SIZE) + 16;
 
+const DEFAULT_DIR = new Float32Array([0, -1, 0]);
 const DEFAULT_COLOR = new Float32Array([1, 1, 1]);
 
 export class RenderLightManager {
@@ -12,6 +13,7 @@ export class RenderLightManager {
   lightArrayBuffer: ArrayBuffer;
 
   pointLightCount: number = 6;
+  directionalIntensity: number = 0;
 
   environment: GPUTexture; // IBL Map
   defaultEnvironment: GPUTexture;
@@ -45,6 +47,12 @@ export class RenderLightManager {
   }
 
   updateLights(renderables: Renderables) {
+    const dirLightArray = new Float32Array(this.lightArrayBuffer, 0, 8);
+    dirLightArray.set(renderables.directionalLight?.direction || DEFAULT_DIR);
+    dirLightArray.set(renderables.directionalLight?.color || DEFAULT_COLOR, 4);
+    dirLightArray[7] = renderables.directionalLight?.intensity || 0;
+    this.directionalIntensity = dirLightArray[7];
+
     // TODO: This shouldn't have to be updated every frame, but whatever.
     this.pointLightCount = Math.min(renderables.pointLights.length || 0, MAX_POINT_LIGHTS);
 

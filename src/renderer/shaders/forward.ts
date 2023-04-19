@@ -88,8 +88,15 @@ export function getForwardShader(layout: Readonly<GeometryLayout>, material: Ren
     @fragment
     fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
       let surface = surfaceInfoFromForward(input);
+      if (surface.alpha < 0.05) {
+        discard;
+      }
 
       var Lo = pbrSurfaceColorIbl(surface);
+
+      if (lights.directionalLight.intensity > 0) {
+        Lo += pbrDirectionalLight(lights.directionalLight, surface);
+      }
 
       // Point lights
       for (var i: u32 = 0; i < lights.pointLightCount; i++) {
@@ -99,7 +106,8 @@ export function getForwardShader(layout: Readonly<GeometryLayout>, material: Ren
         Lo += pbrPointLight(*light, surface);
       }
 
-      Lo += material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
+      let emmisive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
+      Lo += (surface.diffuseColor * surface.ao * lightAmbient) + emmisive;
 
       return vec4f(Lo, surface.alpha);
     }
