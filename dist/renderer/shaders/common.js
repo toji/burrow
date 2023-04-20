@@ -6,8 +6,10 @@ export const cameraStruct = /* wgsl */ `
     projection: mat4x4f,
     view: mat4x4f,
     invViewProjection: mat4x4f,
+    invProjection: mat4x4f,
     position: vec3f,
     time: f32,
+    zRange: vec2f,
   };
 `;
 export const lightStruct = /* wgsl */ `

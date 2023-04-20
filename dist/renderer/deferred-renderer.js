@@ -9,6 +9,7 @@ import { TonemapRenderer } from './render-utils/tonemap.js';
 import { getGBufferShader, getLightingShader } from './shaders/deferred.js';
 import { getForwardShader } from './shaders/forward.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
+import { SsaoRenderer } from './render-utils/ssao.js';
 export var DebugViewType;
 (function (DebugViewType) {
     DebugViewType["none"] = "none";
@@ -24,7 +25,8 @@ export var DebugViewType;
 ;
 // To prevent per-frame allocations.
 const invViewProjection = new Mat4();
-const cameraArray = new Float32Array(64);
+const invProjection = new Mat4();
+const cameraArray = new Float32Array(80);
 const IDENTITY_MATRIX = new Mat4();
 class DeferredRenderSetProvider extends RenderSetProvider {
     renderer;
@@ -175,18 +177,22 @@ export class DeferredRenderer extends RendererBase {
     lightAttachments;
     depthAttachment;
     textureVisualizer;
-    debugView = DebugViewType.none;
+    debugView = DebugViewType.all;
     enableBloom = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
+    enableSsao = false;
     frameBindGroupLayout;
     frameBindGroup;
     cameraBuffer;
     projection;
+    zNear = 0.1;
+    zFar = 50.0;
     gBufferBindGroupLayout;
     gBufferBindGroup;
     lightSpriteRenderer;
     skyboxRenderer;
     tonemapRenderer;
     bloomRenderer;
+    ssaoRenderer;
     computeSkinner;
     defaultMaterial;
     deferredRenderSetProvider;
@@ -197,7 +203,7 @@ export class DeferredRenderer extends RendererBase {
         this.projection = new Mat4();
         this.cameraBuffer = device.createBuffer({
             label: 'camera uniform buffer',
-            size: 256,
+            size: cameraArray.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.frameBindGroupLayout = device.createBindGroupLayout({
@@ -247,6 +253,7 @@ export class DeferredRenderer extends RendererBase {
         this.skyboxRenderer = new SkyboxRenderer(device, this.frameBindGroupLayout, this.depthFormat);
         this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
         this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
+        this.ssaoRenderer = new SsaoRenderer(device, this.frameBindGroupLayout, 'rgba8unorm');
         this.computeSkinner = new ComputeSkinningManager(this);
         this.defaultMaterial = this.createMaterial({
             label: 'Default Material',
@@ -290,7 +297,7 @@ export class DeferredRenderer extends RendererBase {
             // Textures are already a compatible size!
             return;
         }
-        this.projection.perspectiveZO(Math.PI * 0.5, width / height, 0.1, 50);
+        this.projection.perspectiveZO(Math.PI * 0.5, width / height, this.zNear, this.zFar);
         // Recreate all the attachments.
         const size = this.attachmentSize = { width, height };
         const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
@@ -420,10 +427,13 @@ export class DeferredRenderer extends RendererBase {
     updateCamera(camera) {
         Mat4.multiply(invViewProjection, this.projection, camera.viewMatrix);
         invViewProjection.invert();
+        Mat4.invert(invProjection, this.projection);
         cameraArray.set(this.projection, 0);
         cameraArray.set(camera.viewMatrix, 16);
         cameraArray.set(invViewProjection, 32);
-        cameraArray.set(camera.position, 48);
+        cameraArray.set(invProjection, 48);
+        cameraArray.set(camera.position, 64);
+        cameraArray.set([performance.now(), this.zNear, this.zFar], 67);
         this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
     }
     drawRenderSet(renderPass, renderSet) {
@@ -491,6 +501,21 @@ export class DeferredRenderer extends RendererBase {
         gBufferPass.setBindGroup(0, this.frameBindGroup);
         this.drawRenderSet(gBufferPass, deferredRenderSet);
         gBufferPass.end();
+        // SSAO pass
+        if (this.enableSsao) {
+            const ssaoPass = encoder.beginRenderPass({
+                label: 'ssao pass',
+                colorAttachments: [{
+                        view: this.colorAttachments[0].view,
+                        loadOp: 'load',
+                        storeOp: 'store'
+                    }]
+            });
+            ssaoPass.setBindGroup(0, this.frameBindGroup);
+            this.ssaoRenderer.render(ssaoPass, this.depthAttachment.view, this.colorAttachments[1].view);
+            ssaoPass.end();
+        }
+        // Deferred lighting pass
         const lightingPass = encoder.beginRenderPass({
             label: 'deferred lighting pass',
             colorAttachments: this.lightAttachments,

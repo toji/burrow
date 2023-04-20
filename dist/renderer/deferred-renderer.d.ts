@@ -14,6 +14,7 @@ import { DirectionalLight, PointLight } from '../scene/light.js';
 import { RenderSkin } from '../geometry/skin.js';
 import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
+import { SsaoRenderer } from './render-utils/ssao.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -73,16 +74,20 @@ export declare class DeferredRenderer extends RendererBase {
     textureVisualizer: TextureVisualizer;
     debugView: DebugViewType;
     enableBloom: boolean;
+    enableSsao: boolean;
     frameBindGroupLayout: GPUBindGroupLayout;
     frameBindGroup: GPUBindGroup;
     cameraBuffer: GPUBuffer;
     projection: Mat4;
+    zNear: number;
+    zFar: number;
     gBufferBindGroupLayout: GPUBindGroupLayout;
     gBufferBindGroup: GPUBindGroup;
     lightSpriteRenderer: LightSpriteRenderer;
     skyboxRenderer: SkyboxRenderer;
     tonemapRenderer: TonemapRenderer;
     bloomRenderer: BloomRenderer;
+    ssaoRenderer: SsaoRenderer;
     computeSkinner: ComputeSkinningManager;
     defaultMaterial: RenderMaterial;
     deferredRenderSetProvider: DeferredRenderSetProvider;
