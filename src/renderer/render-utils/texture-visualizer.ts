@@ -57,7 +57,7 @@ export class TextureVisualizer {
         @group(0) @binding(1) var img : texture_2d<f32>;
         @fragment
         fn fragmentMain(@location(0) texCoord : vec2f) -> @location(0) vec4f {
-            return textureSample(img, imgSampler, texCoord);
+            return vec4(textureSample(img, imgSampler, texCoord).rgb, 1);
         }
 
         @fragment

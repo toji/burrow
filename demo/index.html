@@ -59,7 +59,7 @@
         throw new Error('WebGPU not supported.');
       }
 
-      const LOCAL_MODELS = true;
+      const LOCAL_MODELS = false;
       let GltfModels;
       const LocalRootDir = './media/models';
       if (LOCAL_MODELS) {
@@ -101,7 +101,7 @@
         };
       }
 
-      let modelPath = GltfModels.dragon;
+      let modelPath = GltfModels.sponza;
 
       const EnvRootDir = './media/environments';
       const EnvMaps = {
@@ -327,6 +327,10 @@
       }).on('change', (ev) => {
         bloomStrength.hidden = !ev.value;
       });
+
+      /*lightsFolder.addInput(renderer, 'enableSsao', {
+        label: 'SSAO',
+      });*/
 
       const bloomStrength = lightsFolder.addInput(renderer.tonemapRenderer, 'bloomStrength', {
         label: 'strength',
