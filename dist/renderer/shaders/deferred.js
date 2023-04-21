@@ -18,8 +18,6 @@ export function getGBufferShader(layout, material, skinned) {
       @location(3) light : vec4f,
     };
 
-    const lightAmbient = vec3f(0.01);
-
 #if ${ditheredAlpha}
     ${ditherFunctions}
 #endif
@@ -58,8 +56,7 @@ export function getGBufferShader(layout, material, skinned) {
 
       // Emissive gets output directly to the light accumulation texture
       let emissive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
-
-      out.light = vec4f((input.color * baseColor.rgb * occlusion * lightAmbient) + emissive, 1);
+      out.light = vec4f(emissive, 1);
 
       return out;
     }
@@ -137,10 +134,11 @@ export function getLightingShader(useEnvLight, usePointLights, useDirLight) {
 
       // Emmissive is handled directly in the gBuffer pass
 
+      // Ambient
+      var Lo = surface.diffuseColor * surface.ao * lights.ambient;
+
 #if ${useEnvLight}
-      var Lo = pbrSurfaceColorIbl(surface);
-#else
-      var Lo = vec3f(0);
+      Lo += pbrSurfaceColorIbl(surface);
 #endif
 
 #if ${useDirLight}

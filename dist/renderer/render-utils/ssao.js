@@ -1,6 +1,7 @@
 import { cameraStruct } from "../shaders/common.js";
 import { Vec3 } from '../../../node_modules/gl-matrix/dist/esm/index.js';
 const SSAO_SAMPLES = 8;
+const SSAO_NOISE_VALUES = 16;
 const SSAO_SHADER = /*wgsl*/ `
   ${cameraStruct}
   @group(0) @binding(0) var<uniform> camera: Camera;
@@ -19,15 +20,22 @@ const SSAO_SHADER = /*wgsl*/ `
 
   struct SsaoSamples {
     sampleCount: u32,
+    noise: array<vec3f, ${SSAO_NOISE_VALUES}>,
     samples: array<vec3f>,
   }
   @group(1) @binding(3) var<storage> ssao: SsaoSamples;
-  
-  const sampleRadius = 0.2;
-  const sampleBias = 0.005;
+
+  const sampleRadius = 0.25;
+  const sampleBias = 0.01;
+
+  fn worldPosFromDepth(texcoord: vec2f, depth: f32) -> vec3f {
+    let clipSpacePos = vec4f((texcoord * 2 - 1) * vec2f(1, -1), depth, 1);
+    let worldPos = camera.invViewProjection * clipSpacePos;
+    return (worldPos.xyz / worldPos.w);
+  }
 
   fn viewPosFromDepth(texcoord: vec2f, depth: f32) -> vec3f {
-    let clipSpacePos = vec4f((texcoord * 2 - 1), depth, 1);
+    let clipSpacePos = vec4f((texcoord * 2 - 1) * vec2f(1, -1), depth, 1);
     let viewPos = camera.invProjection * clipSpacePos;
     return (viewPos.xyz / viewPos.w);
   }
@@ -38,34 +46,32 @@ const SSAO_SHADER = /*wgsl*/ `
 
   @fragment
   fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = (1.0 / vec2f(textureDimensions(depthTexture)));
+    let texelSize = (1 / vec2f(textureDimensions(depthTexture)));
     let texcoord = pos.xy * texelSize;
-    
-    let normal = normalize(2 * textureSample(normalTexture, ssaoSampler, texcoord).xyz - 1);
-    let depth = textureSample(depthTexture, ssaoSampler, texcoord);
 
-    //let randomVec = normalize(vec3f(2 * noiseSample.xy - 1, noiseSample.z));
-    let randomVec = normalize(vec3f(0.5));
+    let worldNorm = normalize(2 * textureLoad(normalTexture, vec2u(pos.xy), 0).xyz - 1);
+    let normal = normalize((camera.view * vec4f(worldNorm, 0)).xyz); // View space
+
+    let randomVec = ssao.noise[(u32(pos.x) % 4) + ((u32(pos.y) % 4) * 4)];
     let tangent = normalize(randomVec - normal * dot(randomVec, normal));
     let bitangent = cross(normal, tangent);
     let tbn = mat3x3f(tangent, bitangent, normal);
 
+    let depth = textureLoad(depthTexture, vec2u(pos.xy), 0);
     let viewPos = viewPosFromDepth(texcoord, depth);
     let viewDepth = linearDepth(depth);
 
     var ao = 0.0;
     for (var i = 0u; i < ssao.sampleCount; i++) {
       let samplePos = viewPos + (tbn * ssao.samples[i] * sampleRadius);
-      var offset = vec4f(samplePos, 1);
-      offset = camera.projection * offset;
-      let offsetCoord = (offset.xy / offset.w) * 0.5 + 0.5;
+      let offset = camera.projection * vec4f(samplePos, 1);
+      let offsetCoord = ((offset.xy / offset.w) * vec2f(1, -1) * 0.5 + 0.5);
       let sampleDepth = textureSample(depthTexture, ssaoSampler, offsetCoord);
-      //ao += sampleDepth;
-      
       let sampleZ = linearDepth(sampleDepth);
-      let rangeCheck = smoothstep(0, 1, sampleRadius / abs(viewDepth - sampleZ));
+
       if (viewDepth > (sampleZ + sampleBias)) {
-        ao += rangeCheck;
+        let intensity = smoothstep(0, 1, sampleRadius / abs(viewDepth - sampleZ));
+        ao += intensity;
       }
     }
 
@@ -142,20 +148,34 @@ export class SsaoRenderer {
             magFilter: 'linear',
         });
         this.sampleBuffer = device.createBuffer({
-            size: (4 * Float32Array.BYTES_PER_ELEMENT * (SSAO_SAMPLES + 1)),
+            size: (4 * Float32Array.BYTES_PER_ELEMENT * (SSAO_SAMPLES + SSAO_NOISE_VALUES + 1)),
             usage: GPUBufferUsage.STORAGE,
             mappedAtCreation: true,
         });
         const sampleBufferArrayBuffer = this.sampleBuffer.getMappedRange();
         new Uint32Array(sampleBufferArrayBuffer, 0, 1)[0] = SSAO_SAMPLES;
+        function lerp(a, b, t) {
+            return a + t * (b - a);
+        }
+        // Generate noise
+        for (let i = 0; i < SSAO_NOISE_VALUES; ++i) {
+            const v = new Vec3(sampleBufferArrayBuffer, (i + 1) * 16);
+            v[0] = Math.random() * 2 - 1;
+            v[1] = Math.random() * 2 - 1;
+            v[2] = 0.0;
+            v.normalize();
+        }
         // Generate a random hemisphere of samples
         for (let i = 0; i < SSAO_SAMPLES; ++i) {
-            const v = new Vec3(sampleBufferArrayBuffer, i * 16 + 4);
-            do {
-                v[0] = Math.random() * 2 - 1;
-                v[1] = Math.random() * 2 - 1;
-                v[2] = Math.random();
-            } while (Vec3.magnitude(v) <= 1);
+            const v = new Vec3(sampleBufferArrayBuffer, (i + SSAO_NOISE_VALUES + 1) * 16);
+            v[0] = Math.random() * 2 - 1;
+            v[1] = Math.random() * 2 - 1;
+            v[2] = Math.random();
+            v.normalize();
+            v.scale(Math.random());
+            let scale = (i / SSAO_SAMPLES);
+            scale = lerp(0.1, 1.0, scale * scale);
+            v.scale(scale);
         }
         this.sampleBuffer.unmap();
     }

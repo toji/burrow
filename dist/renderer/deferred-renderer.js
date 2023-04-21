@@ -177,7 +177,7 @@ export class DeferredRenderer extends RendererBase {
     lightAttachments;
     depthAttachment;
     textureVisualizer;
-    debugView = DebugViewType.all;
+    debugView = DebugViewType.none;
     enableBloom = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
     enableSsao = false;
     frameBindGroupLayout;

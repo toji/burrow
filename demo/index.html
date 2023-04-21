@@ -59,7 +59,7 @@
         throw new Error('WebGPU not supported.');
       }
 
-      const LOCAL_MODELS = false;
+      const LOCAL_MODELS = true;
       let GltfModels;
       const LocalRootDir = './media/models';
       if (LOCAL_MODELS) {
@@ -101,7 +101,7 @@
         };
       }
 
-      let modelPath = GltfModels.sponza;
+      let modelPath = GltfModels.dragon;
 
       const EnvRootDir = './media/environments';
       const EnvMaps = {
@@ -275,6 +275,7 @@
         pointLightCount: pointLightColors.length,
         pointLights: [],
         animateLights: true,
+        ambient: {r: 0.05, g: 0.05, b: 0.05},
         directional: {
           direction: {x: 0.5, y: 1, z: 0.25},
           color: {r: 1, g: 1, b: 0.8},
@@ -328,9 +329,9 @@
         bloomStrength.hidden = !ev.value;
       });
 
-      /*lightsFolder.addInput(renderer, 'enableSsao', {
+      lightsFolder.addInput(renderer, 'enableSsao', {
         label: 'SSAO',
-      });*/
+      });
 
       const bloomStrength = lightsFolder.addInput(renderer.tonemapRenderer, 'bloomStrength', {
         label: 'strength',
@@ -338,6 +339,10 @@
         min: 0,
         max: 1,
         hidden: !renderer.enableBloom
+      });
+
+      lightsFolder.addInput(lightState, 'ambient', {
+        color: {type: 'float'},
       });
 
       const pointLightFolder = lightsFolder.addFolder({
@@ -420,6 +425,7 @@
         const renderables = {
           meshes: [],
           pointLights: [],
+          ambientLight: [lightState.ambient.r, lightState.ambient.g, lightState.ambient.b],
           directionalLight: {
             direction: [lightState.directional.direction.x, lightState.directional.direction.y, lightState.directional.direction.z],
             color: [lightState.directional.color.r, lightState.directional.color.g, lightState.directional.color.b],

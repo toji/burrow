@@ -4,6 +4,7 @@ const POINT_LIGHT_STRUCT_SIZE = 32;
 const LIGHT_BUFFER_SIZE = DIRECTIONAL_LIGHT_STRUCT_SIZE + (MAX_POINT_LIGHTS * POINT_LIGHT_STRUCT_SIZE) + 16;
 const DEFAULT_DIR = new Float32Array([0, -1, 0]);
 const DEFAULT_COLOR = new Float32Array([1, 1, 1]);
+const DEFAULT_AMBIENT = new Float32Array([0, 0, 0]);
 export class RenderLightManager {
     device;
     lightBuffer;
@@ -39,18 +40,20 @@ export class RenderLightManager {
         });
     }
     updateLights(renderables) {
-        const dirLightArray = new Float32Array(this.lightArrayBuffer, 0, 8);
+        const ambientArray = new Float32Array(this.lightArrayBuffer, 0, 3);
+        ambientArray.set(renderables.ambientLight || DEFAULT_AMBIENT);
+        const dirLightArray = new Float32Array(this.lightArrayBuffer, 16, 8);
         dirLightArray.set(renderables.directionalLight?.direction || DEFAULT_DIR);
         dirLightArray.set(renderables.directionalLight?.color || DEFAULT_COLOR, 4);
         dirLightArray[7] = renderables.directionalLight?.intensity || 0;
         this.directionalIntensity = dirLightArray[7];
         // TODO: This shouldn't have to be updated every frame, but whatever.
         this.pointLightCount = Math.min(renderables.pointLights.length || 0, MAX_POINT_LIGHTS);
-        const pointLightCount = new Uint32Array(this.lightArrayBuffer, DIRECTIONAL_LIGHT_STRUCT_SIZE, 1);
+        const pointLightCount = new Uint32Array(this.lightArrayBuffer, DIRECTIONAL_LIGHT_STRUCT_SIZE + 16, 1);
         pointLightCount[0] = this.pointLightCount;
         for (let i = 0; i < this.pointLightCount; ++i) {
             const sceneLight = renderables.pointLights[i];
-            const lightOffset = DIRECTIONAL_LIGHT_STRUCT_SIZE + 16 + (i * POINT_LIGHT_STRUCT_SIZE);
+            const lightOffset = DIRECTIONAL_LIGHT_STRUCT_SIZE + 32 + (i * POINT_LIGHT_STRUCT_SIZE);
             // TODO: These arrays could be cached.
             const pointLightArray = new Float32Array(this.lightArrayBuffer, lightOffset, 8);
             pointLightArray.set(sceneLight.worldPosition);

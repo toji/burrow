@@ -1,4 +1,4 @@
-import { Mat4, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
+import { Mat4, Vec3, Vec3Like } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
@@ -53,6 +53,7 @@ export interface SceneMesh {
 
 export interface Renderables {
   meshes: SceneMesh[];
+  ambientLight: Vec3Like,
   directionalLight?: DirectionalLight;
   pointLights: PointLight[];
 }
@@ -224,7 +225,7 @@ export class DeferredRenderer extends RendererBase {
 
   textureVisualizer: TextureVisualizer;
 
-  debugView: DebugViewType = DebugViewType.all;
+  debugView: DebugViewType = DebugViewType.none;
   enableBloom: boolean = false; // This eats up a lot of fill rate, and I'm still not satisfied with the effect, so false by default.
   enableSsao: boolean = false;
 
@@ -614,7 +615,7 @@ export class DeferredRenderer extends RendererBase {
           storeOp: 'store'
         }]
       });
-      
+
       ssaoPass.setBindGroup(0, this.frameBindGroup);
       this.ssaoRenderer.render(ssaoPass, this.depthAttachment.view, this.colorAttachments[1].view);
 

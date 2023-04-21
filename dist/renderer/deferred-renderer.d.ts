@@ -1,5 +1,5 @@
 /// <reference types="dist" />
-import { Mat4, Vec3 } from '../../node_modules/gl-matrix/dist/esm/index.js';
+import { Mat4, Vec3, Vec3Like } from '../../node_modules/gl-matrix/dist/esm/index.js';
 import { RenderGeometry } from '../geometry/geometry.js';
 import { GeometryLayout } from '../geometry/geometry-layout.js';
 import { RenderMaterial } from '../material/material.js';
@@ -41,6 +41,7 @@ export interface SceneMesh {
 }
 export interface Renderables {
     meshes: SceneMesh[];
+    ambientLight: Vec3Like;
     directionalLight?: DirectionalLight;
     pointLights: PointLight[];
 }

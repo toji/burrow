@@ -34,8 +34,6 @@ export function getForwardShader(layout, material, skinned) {
     ${lightStruct}
     @group(0) @binding(1) var<storage> lights : Lights;
 
-    const lightAmbient = vec3f(0.01);
-
     @group(0) @binding(2) var environmentSampler : sampler;
     @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
 
@@ -101,7 +99,7 @@ export function getForwardShader(layout, material, skinned) {
       }
 
       let emmisive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
-      Lo += (surface.diffuseColor * surface.ao * lightAmbient) + emmisive;
+      Lo += (surface.diffuseColor * surface.ao * * lights.ambient) + emmisive;
 
       return vec4f(Lo, surface.alpha);
     }

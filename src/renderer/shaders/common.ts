@@ -31,6 +31,7 @@ export const lightStruct = /* wgsl */`
   };
 
   struct Lights {
+    ambient: vec3f,
     directionalLight: DirectionalLight,
     pointLightCount: u32,
     pointLights: array<PointLight>,
