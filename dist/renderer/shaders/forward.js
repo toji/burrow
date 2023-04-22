@@ -99,7 +99,7 @@ export function getForwardShader(layout, material, skinned) {
       }
 
       let emmisive = material.emissiveFactor * textureSample(emissiveTexture, pbrSampler, input.texcoord).rgb;
-      Lo += (surface.diffuseColor * surface.ao * * lights.ambient) + emmisive;
+      Lo += (surface.diffuseColor * surface.ao * lights.ambient) + emmisive;
 
       return vec4f(Lo, surface.alpha);
     }

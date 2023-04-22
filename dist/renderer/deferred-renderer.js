@@ -503,17 +503,7 @@ export class DeferredRenderer extends RendererBase {
         gBufferPass.end();
         // SSAO pass
         if (this.enableSsao) {
-            const ssaoPass = encoder.beginRenderPass({
-                label: 'ssao pass',
-                colorAttachments: [{
-                        view: this.colorAttachments[0].view,
-                        loadOp: 'load',
-                        storeOp: 'store'
-                    }]
-            });
-            ssaoPass.setBindGroup(0, this.frameBindGroup);
-            this.ssaoRenderer.render(ssaoPass, this.depthAttachment.view, this.colorAttachments[1].view);
-            ssaoPass.end();
+            this.ssaoRenderer.render(encoder, this.frameBindGroup, this.depthAttachment.view, this.colorAttachments[1].view, this.rgbaTexture);
         }
         // Deferred lighting pass
         const lightingPass = encoder.beginRenderPass({

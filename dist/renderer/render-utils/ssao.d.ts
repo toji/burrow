@@ -5,6 +5,11 @@ export declare class SsaoRenderer {
     bindGroupLayout: GPUBindGroupLayout;
     sampler: GPUSampler;
     sampleBuffer: GPUBuffer;
+    blurPipelineA: GPURenderPipeline;
+    blurPipelineB: GPURenderPipeline;
+    blurTexture: GPUTexture;
+    blurTextureView: GPUTextureView;
+    blurBindGroup: GPUBindGroup;
     constructor(device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout, colorFormat: GPUTextureFormat);
-    render(renderPass: GPURenderPassEncoder, depthTextureView: GPUTextureView, normalTextureView: GPUTextureView): void;
+    render(encoder: GPUCommandEncoder, frameBindGroup: GPUBindGroup, depthTextureView: GPUTextureView, normalTextureView: GPUTextureView, targetTexture: GPUTexture): void;
 }
