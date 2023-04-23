@@ -1,24 +1,17 @@
 // Technique from https://learnopengl.com/Guest-Articles/2022/Phys.-Based-Bloom
 
+import { FullscreenQuadVertexState } from "./fullscreen-quad.js";
+
 const BLOOM_STEPS = 5;
 
 // TODO: Maybe this can be done more efficiently in a compute shader?
 export const bloomShader = /* wgsl */`
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
-    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-  @vertex
-  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-    return vec4f(pos[i], 0, 1);
-  }
-
   @group(0) @binding(0) var sourceTexture: texture_2d<f32>;
   @group(0) @binding(1) var sourceSampler: sampler;
 
   @fragment
-  fn downsampleMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
+  fn downsampleMain(@location(0) texcoord : vec2f) -> @location(0) vec4f {
     let texelSize = (1.0 / vec2f(textureDimensions(sourceTexture)));
-    let texcoord = pos.xy * texelSize * 2;
     let x = texelSize.x;
     let y = texelSize.y;
 
@@ -49,9 +42,7 @@ export const bloomShader = /* wgsl */`
   const filterRadius = 0.005;
 
   @fragment
-  fn upsampleMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = 1.0 / vec2f(textureDimensions(sourceTexture));
-    let texcoord = pos.xy * texelSize / 2;
+  fn upsampleMain(@location(0) texcoord : vec2f) -> @location(0) vec4f {
     let x = filterRadius;
     let y = filterRadius;
 
@@ -105,15 +96,14 @@ export class BloomRenderer {
       code: bloomShader
     });
 
-    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [this.bindGroupLayout] })
+    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [this.bindGroupLayout] });
+
+    const vertex = FullscreenQuadVertexState(device);
 
     this.downsamplePipeline = device.createRenderPipeline({
       label: 'bloom downsample pipeline',
       layout: pipelineLayout,
-      vertex: {
-        module,
-        entryPoint: 'vertexMain',
-      },
+      vertex,
       fragment: {
         module,
         entryPoint: 'downsampleMain',
@@ -126,10 +116,7 @@ export class BloomRenderer {
     this.upsamplePipeline = this.device.createRenderPipeline({
       label: 'bloom upsample pipeline',
       layout: pipelineLayout,
-      vertex: {
-        module,
-        entryPoint: 'vertexMain',
-      },
+      vertex,
       fragment: {
         module,
         entryPoint: 'upsampleMain',
