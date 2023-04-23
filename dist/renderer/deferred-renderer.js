@@ -10,6 +10,7 @@ import { getGBufferShader, getLightingShader } from './shaders/deferred.js';
 import { getForwardShader } from './shaders/forward.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
+import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
 export var DebugViewType;
 (function (DebugViewType) {
     DebugViewType["none"] = "none";
@@ -392,10 +393,7 @@ export class DeferredRenderer extends RendererBase {
             pipeline = this.device.createRenderPipeline({
                 label: `lighting render pipeline ${key}`,
                 layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
-                vertex: {
-                    module,
-                    entryPoint: 'vertexMain',
-                },
+                vertex: FullscreenQuadVertexState(this.device),
                 depthStencil: {
                     depthCompare: 'always',
                     depthWriteEnabled: false,

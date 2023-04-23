@@ -1,20 +1,13 @@
 import { cameraStruct } from "../shaders/common.js";
 import { Vec3 } from '../../../node_modules/gl-matrix/dist/esm/index.js';
+import { FullscreenQuadVertexState } from "./fullscreen-quad.js";
 const SSAO_SAMPLES = 8;
 const SSAO_NOISE_VALUES = 16;
 const UNIT_VEC_Z = new Vec3(0, 0, 1);
-const BLUR_TARGET_FORMAT = 'r8unorm';
+const SSAO_TARGET_FORMAT = 'r8unorm';
 const SSAO_SHADER = /*wgsl*/ `
   ${cameraStruct}
   @group(0) @binding(0) var<uniform> camera: Camera;
-
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
-    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-  @vertex
-  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-    return vec4f(pos[i], 0, 1);
-  }
 
   @group(1) @binding(0) var depthTexture: texture_depth_2d;
   @group(1) @binding(1) var normalTexture: texture_2d<f32>;
@@ -42,11 +35,8 @@ const SSAO_SHADER = /*wgsl*/ `
   }
 
   @fragment
-  fn fragmentMain(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = (1 / vec2f(textureDimensions(depthTexture)));
-    let texcoord = pos.xy * texelSize;
-
-    let worldNorm = normalize(2 * textureLoad(normalTexture, vec2u(pos.xy), 0).xyz - 1);
+  fn fragmentMain(@builtin(position) pos: vec4f, @location(0) texcoord: vec2f) -> @location(0) vec4f {
+    let worldNorm = normalize(2 * textureSample(normalTexture, ssaoSampler, texcoord).xyz - 1);
     let normal = normalize((camera.view * vec4f(worldNorm, 0)).xyz); // View space
 
     let randomVec = ssao.noise[(u32(pos.x) % 4) + ((u32(pos.y) % 4) * 4)];
@@ -54,7 +44,7 @@ const SSAO_SHADER = /*wgsl*/ `
     let bitangent = cross(normal, tangent);
     let tbn = mat3x3f(tangent, bitangent, normal);
 
-    let depth = textureLoad(depthTexture, vec2u(pos.xy), 0);
+    let depth = textureSample(depthTexture, ssaoSampler, texcoord);
     let viewPos = viewPosFromDepth(texcoord, depth);
     let viewDepth = linearDepth(depth);
 
@@ -73,19 +63,11 @@ const SSAO_SHADER = /*wgsl*/ `
     }
 
     ao = 1 - (ao / f32(ssao.sampleCount));
-    return vec4f(0, 0, 0, ao);
+    return vec4f(ao);
   }
 `;
 // AO Blur
 const BLUR_SHADER = /*wgsl*/ `
-  const pos : array<vec2f, 3> = array<vec2f, 3>(
-    vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-  @vertex
-  fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-    return vec4f(pos[i], 0, 1);
-  }
-
   @group(0) @binding(0) var ssaoTexture: texture_2d<f32>;
   @group(0) @binding(1) var ssaoSampler: sampler;
 
@@ -113,28 +95,11 @@ const BLUR_SHADER = /*wgsl*/ `
     sum = sum + textureSample(ssaoTexture, ssaoSampler, texcoord + step * 2.0) * weights[2];
     sum = sum + textureSample(ssaoTexture, ssaoSampler, texcoord - step * 2.0) * weights[2];
 
-    // This is more compact than the unrolled loop above, but was causing corruption on older Mac Intel GPUs.
-    //for (var i = 1; i < 3; i = i + 1) {
-    //  sum = sum + textureSample(bloomTexture, bloomSampler, texCoord + step * f32(i)) * weights[i];
-    //  sum = sum + textureSample(bloomTexture, bloomSampler, texCoord - step * f32(i)) * weights[i];
-    //}
-
     return sum;
   }
 
   @fragment
-  fn blurMainAlpha(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = (1 / vec2f(textureDimensions(ssaoTexture)));
-    let texcoord = pos.xy * texelSize;
-
-    return getGaussianBlur(texcoord).aaaa;
-  }
-
-  @fragment
-  fn blurMainRed(@builtin(position) pos : vec4f) -> @location(0) vec4f {
-    let texelSize = (1 / vec2f(textureDimensions(ssaoTexture)));
-    let texcoord = pos.xy * texelSize;
-
+  fn blurMain(@location(0) texcoord : vec2f) -> @location(0) vec4f {
     return getGaussianBlur(texcoord).rrrr;
   }
 `;
@@ -144,11 +109,15 @@ export class SsaoRenderer {
     bindGroupLayout;
     sampler;
     sampleBuffer;
+    targetScale = 1;
     blurPipelineA;
     blurPipelineB;
+    ssaoTexture;
+    ssaoTextureView;
     blurTexture;
     blurTextureView;
-    blurBindGroup;
+    blurABindGroup;
+    blurBBindGroup;
     constructor(device, frameBindGroupLayout, colorFormat) {
         this.device = device;
         this.bindGroupLayout = device.createBindGroupLayout({
@@ -175,6 +144,7 @@ export class SsaoRenderer {
             label: 'ssao shader',
             code: SSAO_SHADER,
         });
+        const vertex = FullscreenQuadVertexState(device);
         // Setup a render pipeline for drawing the skybox
         this.pipeline = device.createRenderPipeline({
             label: `ssao pipeline`,
@@ -184,13 +154,42 @@ export class SsaoRenderer {
                     this.bindGroupLayout
                 ]
             }),
-            vertex: {
-                module: shaderModule,
-                entryPoint: 'vertexMain',
-            },
+            vertex,
             fragment: {
                 module: shaderModule,
                 entryPoint: 'fragmentMain',
+                targets: [{
+                        format: SSAO_TARGET_FORMAT,
+                    }],
+            }
+        });
+        const blurShaderModule = device.createShaderModule({
+            label: 'blur shader',
+            code: BLUR_SHADER,
+        });
+        this.blurPipelineA = device.createRenderPipeline({
+            label: `ssao blur pipeline A`,
+            layout: 'auto',
+            vertex,
+            fragment: {
+                module: blurShaderModule,
+                entryPoint: 'blurMain',
+                targets: [{
+                        format: SSAO_TARGET_FORMAT,
+                    }],
+            }
+        });
+        this.blurPipelineB = device.createRenderPipeline({
+            label: `ssao blur pipeline B`,
+            layout: 'auto',
+            vertex,
+            fragment: {
+                module: blurShaderModule,
+                entryPoint: 'blurMain',
+                constants: {
+                    dirX: 1,
+                    dirY: 0,
+                },
                 targets: [{
                         format: colorFormat,
                         writeMask: GPUColorWrite.ALPHA,
@@ -202,45 +201,6 @@ export class SsaoRenderer {
                                 dstFactor: 'one',
                             },
                         },
-                    }],
-            }
-        });
-        const blurShaderModule = device.createShaderModule({
-            label: 'blur shader',
-            code: BLUR_SHADER,
-        });
-        this.blurPipelineA = device.createRenderPipeline({
-            label: `ssao blur pipeline A`,
-            layout: 'auto',
-            vertex: {
-                module: blurShaderModule,
-                entryPoint: 'vertexMain',
-            },
-            fragment: {
-                module: blurShaderModule,
-                entryPoint: 'blurMainAlpha',
-                targets: [{
-                        format: BLUR_TARGET_FORMAT,
-                    }],
-            }
-        });
-        this.blurPipelineB = device.createRenderPipeline({
-            label: `ssao blur pipeline B`,
-            layout: 'auto',
-            vertex: {
-                module: blurShaderModule,
-                entryPoint: 'vertexMain',
-            },
-            fragment: {
-                module: blurShaderModule,
-                entryPoint: 'blurMainRed',
-                constants: {
-                    dirX: 1,
-                    dirY: 0,
-                },
-                targets: [{
-                        format: colorFormat,
-                        writeMask: GPUColorWrite.ALPHA,
                     }],
             }
         });
@@ -302,26 +262,34 @@ export class SsaoRenderer {
                 }],
         });
         const targetTextureView = targetTexture.createView();
-        const targetBindGroup = this.device.createBindGroup({
-            layout: this.blurPipelineA.getBindGroupLayout(0),
-            entries: [{
-                    binding: 0,
-                    resource: targetTextureView,
-                }, {
-                    binding: 1,
-                    resource: this.sampler
-                }],
-        });
-        if (!this.blurTexture ||
-            this.blurTexture.width != targetTexture.width ||
-            this.blurTexture.height != targetTexture.height) {
-            this.blurTexture = this.device.createTexture({
-                size: { width: targetTexture.width, height: targetTexture.height },
+        const blurWidth = Math.ceil(targetTexture.width * this.targetScale);
+        const blurHeight = Math.ceil(targetTexture.height * this.targetScale);
+        if (!this.ssaoTexture ||
+            this.ssaoTexture.width != blurWidth ||
+            this.ssaoTexture.height != blurHeight) {
+            this.ssaoTexture = this.device.createTexture({
+                size: { width: blurWidth, height: blurHeight },
                 usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-                format: BLUR_TARGET_FORMAT,
+                format: SSAO_TARGET_FORMAT,
+            });
+            this.ssaoTextureView = this.ssaoTexture.createView();
+            this.blurTexture = this.device.createTexture({
+                size: { width: blurWidth, height: blurHeight },
+                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+                format: SSAO_TARGET_FORMAT,
             });
             this.blurTextureView = this.blurTexture.createView();
-            this.blurBindGroup = this.device.createBindGroup({
+            this.blurABindGroup = this.device.createBindGroup({
+                layout: this.blurPipelineA.getBindGroupLayout(0),
+                entries: [{
+                        binding: 0,
+                        resource: this.ssaoTextureView,
+                    }, {
+                        binding: 1,
+                        resource: this.sampler
+                    }],
+            });
+            this.blurBBindGroup = this.device.createBindGroup({
                 layout: this.blurPipelineB.getBindGroupLayout(0),
                 entries: [{
                         binding: 0,
@@ -335,7 +303,7 @@ export class SsaoRenderer {
         const ssaoPass = encoder.beginRenderPass({
             label: 'ssao pass',
             colorAttachments: [{
-                    view: targetTextureView,
+                    view: this.ssaoTextureView,
                     loadOp: 'load',
                     storeOp: 'store'
                 }]
@@ -355,7 +323,7 @@ export class SsaoRenderer {
                 }]
         });
         blurPassA.setPipeline(this.blurPipelineA);
-        blurPassA.setBindGroup(0, targetBindGroup);
+        blurPassA.setBindGroup(0, this.blurABindGroup);
         blurPassA.draw(3);
         blurPassA.end();
         // Blur pass B
@@ -368,7 +336,7 @@ export class SsaoRenderer {
                 }]
         });
         blurPassB.setPipeline(this.blurPipelineB);
-        blurPassB.setBindGroup(0, this.blurBindGroup);
+        blurPassB.setBindGroup(0, this.blurBBindGroup);
         blurPassB.draw(3);
         blurPassB.end();
     }

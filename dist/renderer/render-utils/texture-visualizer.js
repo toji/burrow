@@ -1,5 +1,6 @@
 // Mostly lifted from https://github.com/webgpu/webgpu-debugger/blob/main/src/ui/components/TextureLevelViewer/TextureRenderer.ts
 // Because I didn't feel like re-writing code that I had already written.
+import { FullscreenQuadVertexState } from "./fullscreen-quad.js";
 function getTextureType(format) {
     if (format.includes('depth')) {
         return format.includes('stencil') ? 'depth-stencil' : 'depth';
@@ -20,23 +21,6 @@ export class TextureVisualizer {
         this.device = device;
         const shaderModule = device.createShaderModule({
             code: `
-        const pos : array<vec2f, 3> = array<vec2f, 3>(
-          vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-        struct VertexOut {
-          @builtin(position) position : vec4f,
-          @location(0) texcoord : vec2f,
-        };
-
-        @vertex
-        fn vertexMain(@builtin(vertex_index) vertexIndex : u32) -> VertexOut {
-          let p = pos[vertexIndex];
-          var out : VertexOut;
-          out.position = vec4f(p, 0.0, 1.0);
-          out.texcoord = (vec2(p.x, -p.y) + 1) * 0.5;
-          return out;
-        }
-
         struct Uniforms {
           range: vec2f
         };
@@ -143,10 +127,7 @@ export class TextureVisualizer {
         }
       `,
         });
-        const vertex = {
-            module: shaderModule,
-            entryPoint: 'vertexMain',
-        };
+        const vertex = FullscreenQuadVertexState(device);
         const targets = [{
                 format: colorFormat || navigator.gpu.getPreferredCanvasFormat(),
                 blend: {

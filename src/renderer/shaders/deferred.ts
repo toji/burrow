@@ -77,14 +77,6 @@ export function getLightingShader(useEnvLight: boolean, usePointLights: boolean,
     ${lightStruct}
     @group(0) @binding(1) var<storage> lights : Lights;
 
-    const pos : array<vec2f, 3> = array<vec2f, 3>(
-      vec2f(-1, -1), vec2f(-1, 3), vec2f(3, -1));
-
-    @vertex
-    fn vertexMain(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-      return vec4f(pos[i], 0, 1);
-    }
-
     @group(0) @binding(2) var environmentSampler : sampler;
     @group(0) @binding(3) var environmentTexture : texture_cube<f32>;
 

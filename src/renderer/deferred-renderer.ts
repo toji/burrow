@@ -19,6 +19,7 @@ import { RenderSkin } from '../geometry/skin.js';
 import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
+import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
 
 export enum DebugViewType {
   none = "none",
@@ -475,10 +476,7 @@ export class DeferredRenderer extends RendererBase {
       pipeline = this.device.createRenderPipeline({
         label: `lighting render pipeline ${key}`,
         layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.frameBindGroupLayout, this.gBufferBindGroupLayout] }),
-        vertex: {
-          module,
-          entryPoint: 'vertexMain',
-        },
+        vertex: FullscreenQuadVertexState(this.device),
         depthStencil: {
           depthCompare: 'always',
           depthWriteEnabled: false,
