@@ -20,6 +20,7 @@ import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
 import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
+import { MsdfTextRenderer } from './render-utils/msdf-text.js';
 
 export enum DebugViewType {
   none = "none",
@@ -246,6 +247,7 @@ export class DeferredRenderer extends RendererBase {
   tonemapRenderer: TonemapRenderer;
   bloomRenderer: BloomRenderer;
   ssaoRenderer: SsaoRenderer;
+  textRenderer: MsdfTextRenderer;
   computeSkinner: ComputeSkinningManager;
 
   defaultMaterial: RenderMaterial;
@@ -317,6 +319,7 @@ export class DeferredRenderer extends RendererBase {
     this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
     this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
     this.ssaoRenderer = new SsaoRenderer(device, this.frameBindGroupLayout, 'rgba8unorm');
+    this.textRenderer = new MsdfTextRenderer(device, this.frameBindGroupLayout, 'rgb10a2unorm', this.depthFormat);
     this.computeSkinner = new ComputeSkinningManager(this);
 
     this.defaultMaterial = this.createMaterial({
@@ -644,6 +647,8 @@ export class DeferredRenderer extends RendererBase {
     if (this.environment) {
       this.skyboxRenderer.render(forwardPass);
     }
+
+    this.textRenderer.render(forwardPass);
 
     this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
 

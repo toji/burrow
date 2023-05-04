@@ -193,6 +193,8 @@
       }
       loadEnv(envPath);
 
+      renderer.textRenderer.setFont('./media/fonts/ya-hei-ascii-msdf.json', gltfLoader.textureLoader);
+
       let camera = new OrbitCamera(canvas);
       camera.distance = 3;
 
