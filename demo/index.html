@@ -59,7 +59,7 @@
         throw new Error('WebGPU not supported.');
       }
 
-      const LOCAL_MODELS = true;
+      const LOCAL_MODELS = false;
       let GltfModels;
       const LocalRootDir = './media/models';
       if (LOCAL_MODELS) {
@@ -193,7 +193,17 @@
       }
       loadEnv(envPath);
 
-      renderer.textRenderer.setFont('./media/fonts/ya-hei-ascii-msdf.json', gltfLoader.textureLoader);
+      renderer.textRenderer.createFont('./media/fonts/ya-hei-ascii-msdf.json', gltfLoader.textureLoader).then((font) => {
+        renderer.activeText = renderer.textRenderer.formatText(font,
+`I am the very model of a modern Major-General
+I've information vegetable, animal, and mineral
+I know the kings of England, and I quote the fights historical
+From Marathon to Waterloo, in order categorical
+I'm very well acquainted, too, with matters mathematical
+I understand equations, both the simple and quadratical
+About binomial theorem I am teeming with a lot o' news
+With many cheerful facts about the square of the hypotenuse!`);
+      });
 
       let camera = new OrbitCamera(canvas);
       camera.distance = 3;

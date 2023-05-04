@@ -20,7 +20,7 @@ import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
 import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
-import { MsdfTextRenderer } from './render-utils/msdf-text.js';
+import { MsdfFont, MsdfText, MsdfTextRenderer } from './render-utils/msdf-text.js';
 
 export enum DebugViewType {
   none = "none",
@@ -254,6 +254,8 @@ export class DeferredRenderer extends RendererBase {
 
   deferredRenderSetProvider: DeferredRenderSetProvider;
   forwardRenderSetProvider: ForwardRenderSetProvider;
+
+  activeText: MsdfText;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -648,7 +650,7 @@ export class DeferredRenderer extends RendererBase {
       this.skyboxRenderer.render(forwardPass);
     }
 
-    this.textRenderer.render(forwardPass);
+    this.textRenderer.render(forwardPass, this.activeText);
 
     this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
 

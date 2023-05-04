@@ -6,7 +6,7 @@ const msdfTextShader = /*wgsl*/`
   @group(0) @binding(0) var<uniform> camera : Camera;
 
   const pos : array<vec2f, 4> = array<vec2f, 4>(
-    vec2f(-1, 1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, -1)
+    vec2f(0, -1), vec2f(1, -1), vec2f(0, 0), vec2f(1, 0)
   );
 
   struct VertexInput {
@@ -20,30 +20,33 @@ const msdfTextShader = /*wgsl*/`
   };
 
   struct Char {
-    offset: vec2f,
+    texOffset: vec2f,
     size: vec2f,
+    offset: vec2f,
+    texPage: f32,
   };
 
   @group(1) @binding(2) var<storage> chars: array<Char>;
 
+  @group(2) @binding(0) var<storage> text: array<vec3f>;
+
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
-    let char = chars[input.instance];
-    let charPos = pos[input.vertex] * char.size + vec2(f32(input.instance) * 0.1, 0);
+    let textElement = text[input.instance];
+    let char = chars[u32(textElement.z)];
+    let charPos = pos[input.vertex] * char.size + textElement.xy + char.offset;
 
     var output : VertexOutput;
     output.position = camera.projection * camera.view * vec4f(charPos, 0, 1);
 
-    output.texcoord = pos[input.vertex] * vec2f(1, -1) * 0.5 + 0.5;
+    output.texcoord = pos[input.vertex] * vec2f(1, -1);
     output.texcoord *= char.size;
-    output.texcoord += char.offset;
+    output.texcoord += char.texOffset;
     return output;
   }
 
   @group(1) @binding(0) var fontTexture: texture_2d<f32>;
   @group(1) @binding(1) var fontSampler: sampler;
-
-
 
   fn sampleMsdf(texcoord: vec2f) -> f32 {
     let c = textureSample(fontTexture, fontSampler, texcoord);
@@ -80,13 +83,31 @@ const msdfTextShader = /*wgsl*/`
   }
 `;
 
+export class MsdfFont {
+  charCount: number;
+  defaultChar: any;
+  constructor(public bindGroup: GPUBindGroup, public lineHeight: number, public chars: { [x: number]: any }) {
+    const charArray = Object.values(chars);
+    this.charCount = charArray.length;
+    this.defaultChar = charArray[0];
+  }
+
+  getChar(charCode: number): any {
+    let char = this.chars[charCode];
+    if (!char) { char = this.defaultChar; }
+    return char;
+  }
+}
+
+export class MsdfText {
+  constructor(public bindGroup: GPUBindGroup, public charCount: number, public font: MsdfFont) {}
+}
+
 export class MsdfTextRenderer {
-  bindGroupLayout: GPUBindGroupLayout;
-  bindGroup: GPUBindGroup;
+  fontBindGroupLayout: GPUBindGroupLayout;
+  textBindGroupLayout: GPUBindGroupLayout;
   pipeline: GPURenderPipeline;
   sampler: GPUSampler;
-  fontTexture: GPUTexture;
-  charCount: number;
 
   constructor(public device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout, colorFormat: GPUTextureFormat, depthFormat: GPUTextureFormat) {
     this.sampler = device.createSampler({
@@ -97,8 +118,8 @@ export class MsdfTextRenderer {
       maxAnisotropy: 16,
     });
 
-    this.bindGroupLayout = device.createBindGroupLayout({
-      label: 'msdf text group layout',
+    this.fontBindGroupLayout = device.createBindGroupLayout({
+      label: 'msdf font group layout',
       entries: [{
         binding: 0,
         visibility: GPUShaderStage.FRAGMENT,
@@ -114,6 +135,15 @@ export class MsdfTextRenderer {
       }]
     });
 
+    this.textBindGroupLayout = device.createBindGroupLayout({
+      label: 'msdf text group layout',
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: 'read-only-storage' }
+      }]
+    });
+
     const shaderModule = device.createShaderModule({
       label: 'msdf text shader',
       code: msdfTextShader,
@@ -124,7 +154,8 @@ export class MsdfTextRenderer {
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
           frameBindGroupLayout,
-          this.bindGroupLayout
+          this.fontBindGroupLayout,
+          this.textBindGroupLayout
         ]
       }),
       vertex: {
@@ -162,7 +193,7 @@ export class MsdfTextRenderer {
     });
   }
 
-  async setFont(fontJsonUrl: string, textureLoader: WebGpuTextureLoader) {
+  async createFont(fontJsonUrl: string, textureLoader: WebGpuTextureLoader): Promise<MsdfFont> {
     const response = await fetch(fontJsonUrl);
     const json = await response.json();
 
@@ -174,11 +205,10 @@ export class MsdfTextRenderer {
       pagePromises.push(textureLoader.fromUrl(baseUrl + pageUrl, { mipmaps: false }));
     }
 
-    const chars = json.chars;
-    this.charCount = chars.length;
+    const charCount = json.chars.length;
     const charsBuffer = this.device.createBuffer({
-      label: 'character layout buffer',
-      size: this.charCount * Float32Array.BYTES_PER_ELEMENT * 4,
+      label: 'msdf character layout buffer',
+      size: charCount * Float32Array.BYTES_PER_ELEMENT * 8,
       usage: GPUBufferUsage.STORAGE,
       mappedAtCreation: true,
     });
@@ -188,22 +218,30 @@ export class MsdfTextRenderer {
     const w = 1 / json.common.scaleW;
     const h = 1 / json.common.scaleH;
 
+    const chars: { [x: number]: any } = {};
+
     let offset = 0;
-    for (const char of chars) {
+    for (const [i, char] of json.chars.entries()) {
+      chars[char.id] = char;
+      chars[char.id].charIndex = i;
+      chars[char.id].xadvance *= w;
       charsArray[offset] = char.x * w;
       charsArray[offset+1] = char.y * h;
       charsArray[offset+2] = char.width * w;
       charsArray[offset+3] = char.height * h;
-      offset += 4;
+      charsArray[offset+4] = char.xoffset * w;
+      charsArray[offset+5] = -char.yoffset * h;
+      charsArray[offset+6] = char.page;
+      offset += 8;
     }
 
     charsBuffer.unmap();
 
     const pageTextures = await Promise.all(pagePromises);
 
-    this.bindGroup = this.device.createBindGroup({
-      label: 'msdf text font bind group',
-      layout: this.bindGroupLayout,
+    const bindGroup = this.device.createBindGroup({
+      label: 'msdf font bind group',
+      layout: this.fontBindGroupLayout,
       entries: [{
         binding: 0,
         resource: pageTextures[0].createView({ baseMipLevel: 0, mipLevelCount: 1 }),
@@ -215,13 +253,64 @@ export class MsdfTextRenderer {
         resource: { buffer: charsBuffer },
       }]
     });
+
+    return new MsdfFont(bindGroup, json.common.lineHeight * h, chars);
   }
 
-  render(renderPass: GPURenderPassEncoder) {
-    if (this.bindGroup && this.pipeline) {
+  formatText(font: MsdfFont, text: string): MsdfText {
+    const textBuffer = this.device.createBuffer({
+      label: 'msdf text buffer',
+      size: text.length * Float32Array.BYTES_PER_ELEMENT * 8,
+      usage: GPUBufferUsage.STORAGE,
+      mappedAtCreation: true,
+    });
+
+    const textArray = new Float32Array(textBuffer.getMappedRange());
+    let printedCharCount = 0;
+    let textOffsetX = 0;
+    let textOffsetY = 0;
+    let offset = 0;
+    for (let i = 0; i < text.length; ++i) {
+      let charCode = text.charCodeAt(i);
+
+      switch(charCode) {
+        case 10: // Newline
+          textOffsetX = 0;
+          textOffsetY -= font.lineHeight;
+          continue;
+        case 13: // CR
+          continue;
+        default: {
+          printedCharCount++;
+          let char = font.getChar(charCode);
+          textArray[offset] = textOffsetX;
+          textArray[offset+1] = textOffsetY;
+          textArray[offset+2] = char.charIndex;
+          textOffsetX += char.xadvance;
+          offset += 4;
+        }
+      }
+    }
+    textBuffer.unmap();
+
+    const bindGroup = this.device.createBindGroup({
+      label: 'msdf text bind group',
+      layout: this.textBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: { buffer: textBuffer },
+      }]
+    });
+
+    return new MsdfText(bindGroup, printedCharCount, font);
+  }
+
+  render(renderPass: GPURenderPassEncoder, text: MsdfText) {
+    if (text && this.pipeline) {
       renderPass.setPipeline(this.pipeline);
-      renderPass.setBindGroup(1, this.bindGroup);
-      renderPass.draw(4, this.charCount);
+      renderPass.setBindGroup(1, text.font.bindGroup);
+      renderPass.setBindGroup(2, text.bindGroup);
+      renderPass.draw(4, text.charCount);
     }
   }
 }
