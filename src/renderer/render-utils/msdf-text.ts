@@ -63,7 +63,7 @@ const msdfTextShader = /*wgsl*/`
     return vec4(1, 1, 1, alpha);
   }
 
-  // Technique from https://drewcassidy.me/2020/06/26/sdf-antialiasing/
+  // Antialiasing technique from https://drewcassidy.me/2020/06/26/sdf-antialiasing/
   @fragment
   fn fragmentMainAntialias(input : VertexOutput) -> @location(0) vec4f {
     let dist = 0.5 - sampleMsdf(input.texcoord);
@@ -97,11 +97,18 @@ export class MsdfFont {
     if (!char) { char = this.defaultChar; }
     return char;
   }
-}
+};
+
+export interface MsdfTextMeasurements {
+  width: number,
+  height: number,
+  lineWidths: number[],
+  printedCharCount: number,
+};
 
 export class MsdfText {
-  constructor(public bindGroup: GPUBindGroup, public charCount: number, public font: MsdfFont) {}
-}
+  constructor(public bindGroup: GPUBindGroup, public measurements: MsdfTextMeasurements, public font: MsdfFont) {}
+};
 
 export class MsdfTextRenderer {
   fontBindGroupLayout: GPUBindGroupLayout;
@@ -257,7 +264,7 @@ export class MsdfTextRenderer {
     return new MsdfFont(bindGroup, json.common.lineHeight * h, chars);
   }
 
-  formatText(font: MsdfFont, text: string): MsdfText {
+  formatText(font: MsdfFont, text: string, centered: boolean = false): MsdfText {
     const textBuffer = this.device.createBuffer({
       label: 'msdf text buffer',
       size: text.length * Float32Array.BYTES_PER_ELEMENT * 8,
@@ -266,31 +273,29 @@ export class MsdfTextRenderer {
     });
 
     const textArray = new Float32Array(textBuffer.getMappedRange());
-    let printedCharCount = 0;
-    let textOffsetX = 0;
-    let textOffsetY = 0;
     let offset = 0;
-    for (let i = 0; i < text.length; ++i) {
-      let charCode = text.charCodeAt(i);
 
-      switch(charCode) {
-        case 10: // Newline
-          textOffsetX = 0;
-          textOffsetY -= font.lineHeight;
-          continue;
-        case 13: // CR
-          continue;
-        default: {
-          printedCharCount++;
-          let char = font.getChar(charCode);
-          textArray[offset] = textOffsetX;
-          textArray[offset+1] = textOffsetY;
-          textArray[offset+2] = char.charIndex;
-          textOffsetX += char.xadvance;
-          offset += 4;
-        }
-      }
+    let measurements: MsdfTextMeasurements;
+    if (centered) {
+      measurements = this.measureText(font, text);
+
+      this.measureText(font, text, (textX: number, textY: number, line: number, char: any) => {
+        const lineOffset = measurements.width * -0.5 - (measurements.width - measurements.lineWidths[line]) * -0.5;
+
+        textArray[offset] = textX + lineOffset;
+        textArray[offset+1] = textY + measurements.height * 0.5;
+        textArray[offset+2] = char.charIndex;
+        offset += 4;
+      });
+    } else {
+      measurements = this.measureText(font, text, (textX: number, textY: number, line: number, char: any) => {
+        textArray[offset] = textX;
+        textArray[offset+1] = textY;
+        textArray[offset+2] = char.charIndex;
+        offset += 4;
+      });
     }
+
     textBuffer.unmap();
 
     const bindGroup = this.device.createBindGroup({
@@ -302,7 +307,56 @@ export class MsdfTextRenderer {
       }]
     });
 
-    return new MsdfText(bindGroup, printedCharCount, font);
+    return new MsdfText(bindGroup, measurements, font);
+  }
+
+  measureText(font: MsdfFont, text: string, charCallback?: (x: number, y: number, line: number, char: any) => void ): MsdfTextMeasurements {
+    let maxWidth = 0;
+    const lineWidths: number[] = [];
+
+    let textOffsetX = 0;
+    let textOffsetY = 0;
+    let line = 0;
+    let printedCharCount = 0;
+    for (let i = 0; i < text.length; ++i) {
+      let charCode = text.charCodeAt(i);
+
+      switch(charCode) {
+        case 10: // Newline
+          lineWidths.push(textOffsetX);
+          line++;
+          maxWidth = Math.max(maxWidth, textOffsetX);
+          textOffsetX = 0;
+          textOffsetY -= font.lineHeight
+          continue;
+        case 13: // CR
+          continue;
+        case 32: // Space
+          // For spaces, just advance the offset without actually adding a
+          // character.
+          let char = font.getChar(charCode);
+          textOffsetX += char.xadvance;
+          continue;
+        default: {
+          let char = font.getChar(charCode);
+          if (charCallback) {
+            charCallback(textOffsetX, textOffsetY, line, char);
+          }
+          textOffsetX += char.xadvance;
+          printedCharCount++;
+        }
+      }
+    }
+
+    lineWidths.push(textOffsetX);
+    maxWidth = Math.max(maxWidth, textOffsetX);
+
+    return {
+      width: maxWidth,
+      height: lineWidths.length * font.lineHeight,
+      lineWidths,
+      printedCharCount,
+    };
   }
 
   render(renderPass: GPURenderPassEncoder, text: MsdfText) {
@@ -310,7 +364,7 @@ export class MsdfTextRenderer {
       renderPass.setPipeline(this.pipeline);
       renderPass.setBindGroup(1, text.font.bindGroup);
       renderPass.setBindGroup(2, text.bindGroup);
-      renderPass.draw(4, text.charCount);
+      renderPass.draw(4, text.measurements.printedCharCount);
     }
   }
 }
