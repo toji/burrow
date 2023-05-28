@@ -1,10 +1,7 @@
+import { Mat4Like } from "gl-matrix";
 import { WebGpuTextureLoader } from "../../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js";
-import { cameraStruct } from "../shaders/common.js";
 
 const msdfTextShader = /*wgsl*/`
-  ${cameraStruct}
-  @group(0) @binding(0) var<uniform> camera : Camera;
-
   const pos : array<vec2f, 4> = array<vec2f, 4>(
     vec2f(0, -1), vec2f(1, -1), vec2f(0, 0), vec2f(1, 0)
   );
@@ -26,9 +23,15 @@ const msdfTextShader = /*wgsl*/`
     texPage: f32,
   };
 
-  @group(1) @binding(2) var<storage> chars: array<Char>;
+  struct Camera {
+    projection: mat4x4f,
+    view: mat4x4f,
+  };
 
-  @group(2) @binding(0) var<storage> text: array<vec3f>;
+  @group(0) @binding(2) var<storage> chars: array<Char>;
+
+  @group(1) @binding(0) var<uniform> camera: Camera;
+  @group(1) @binding(1) var<storage> text: array<vec3f>;
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
@@ -45,8 +48,8 @@ const msdfTextShader = /*wgsl*/`
     return output;
   }
 
-  @group(1) @binding(0) var fontTexture: texture_2d<f32>;
-  @group(1) @binding(1) var fontSampler: sampler;
+  @group(0) @binding(0) var fontTexture: texture_2d<f32>;
+  @group(0) @binding(1) var fontSampler: sampler;
 
   fn sampleMsdf(texcoord: vec2f) -> f32 {
     let c = textureSample(fontTexture, fontSampler, texcoord);
@@ -83,10 +86,13 @@ const msdfTextShader = /*wgsl*/`
   }
 `;
 
+type KerningMap = Map<number, Map<number, number>>;
+
 export class MsdfFont {
   charCount: number;
   defaultChar: any;
-  constructor(public bindGroup: GPUBindGroup, public lineHeight: number, public chars: { [x: number]: any }) {
+  constructor(public bindGroup: GPUBindGroup, public lineHeight: number,
+              public chars: { [x: number]: any }, public kernings: KerningMap) {
     const charArray = Object.values(chars);
     this.charCount = charArray.length;
     this.defaultChar = charArray[0];
@@ -107,6 +113,8 @@ export interface MsdfTextMeasurements {
 };
 
 export class MsdfText {
+  public renderBundle: GPURenderBundle;
+
   constructor(public bindGroup: GPUBindGroup, public measurements: MsdfTextMeasurements, public font: MsdfFont) {}
 };
 
@@ -115,14 +123,29 @@ export class MsdfTextRenderer {
   textBindGroupLayout: GPUBindGroupLayout;
   pipeline: GPURenderPipeline;
   sampler: GPUSampler;
+  cameraUniformBuffer: GPUBuffer;
 
-  constructor(public device: GPUDevice, frameBindGroupLayout: GPUBindGroupLayout, colorFormat: GPUTextureFormat, depthFormat: GPUTextureFormat) {
+  renderBundleDescriptor: GPURenderBundleEncoderDescriptor;
+  cameraArray: Float32Array = new Float32Array(16 * 2);
+
+  constructor(public device: GPUDevice, colorFormat: GPUTextureFormat, depthFormat: GPUTextureFormat) {
+    this.renderBundleDescriptor = {
+      colorFormats: [colorFormat],
+      depthStencilFormat: depthFormat,
+    };
+
     this.sampler = device.createSampler({
       label: 'msdf text sampler',
       minFilter: 'linear',
       magFilter: 'linear',
       mipmapFilter: 'linear',
       maxAnisotropy: 16,
+    });
+
+    this.cameraUniformBuffer = device.createBuffer({
+      label: 'msdf camera uniform buffer',
+      size: this.cameraArray.byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
     });
 
     this.fontBindGroupLayout = device.createBindGroupLayout({
@@ -147,6 +170,10 @@ export class MsdfTextRenderer {
       entries: [{
         binding: 0,
         visibility: GPUShaderStage.VERTEX,
+        buffer: {}
+      }, {
+        binding: 1,
+        visibility: GPUShaderStage.VERTEX,
         buffer: { type: 'read-only-storage' }
       }]
     });
@@ -160,7 +187,6 @@ export class MsdfTextRenderer {
       label: `msdf text pipeline`,
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
-          frameBindGroupLayout,
           this.fontBindGroupLayout,
           this.textBindGroupLayout
         ]
@@ -261,7 +287,20 @@ export class MsdfTextRenderer {
       }]
     });
 
-    return new MsdfFont(bindGroup, json.common.lineHeight * h, chars);
+    const kernings = new Map();
+
+    if (json.kernings) {
+      for (const kearning of json.kernings) {
+        let charKerning = kernings.get(kearning.first);
+        if (!charKerning) {
+          charKerning = new Map<number, number>();
+          kernings.set(kearning.first, charKerning);
+        }
+        charKerning.set(kearning.second, kearning.amount * w);
+      }
+    }
+
+    return new MsdfFont(bindGroup, json.common.lineHeight * h, chars, kernings);
   }
 
   formatText(font: MsdfFont, text: string, centered: boolean = false): MsdfText {
@@ -303,6 +342,9 @@ export class MsdfTextRenderer {
       layout: this.textBindGroupLayout,
       entries: [{
         binding: 0,
+        resource: { buffer: this.cameraUniformBuffer },
+      }, {
+        binding: 1,
         resource: { buffer: textBuffer },
       }]
     });
@@ -318,8 +360,10 @@ export class MsdfTextRenderer {
     let textOffsetY = 0;
     let line = 0;
     let printedCharCount = 0;
+    let nextCharCode = text.charCodeAt(0);
     for (let i = 0; i < text.length; ++i) {
-      let charCode = text.charCodeAt(i);
+      let charCode = nextCharCode;
+      nextCharCode = i < text.length - 1 ? text.charCodeAt(i+1) : -1;
 
       switch(charCode) {
         case 10: // Newline
@@ -342,7 +386,14 @@ export class MsdfTextRenderer {
           if (charCallback) {
             charCallback(textOffsetX, textOffsetY, line, char);
           }
-          textOffsetX += char.xadvance;
+
+          let advance = char.xadvance;
+          const kerning = font.kernings.get(charCode);
+          if (kerning) {
+            advance += kerning.get(nextCharCode) ?? 0;
+          }
+
+          textOffsetX += advance;
           printedCharCount++;
         }
       }
@@ -359,12 +410,24 @@ export class MsdfTextRenderer {
     };
   }
 
+  updateCamera(projection: Mat4Like, view: Mat4Like) {
+    this.cameraArray.set(projection, 0);
+    this.cameraArray.set(view, 16);
+    this.device.queue.writeBuffer(this.cameraUniformBuffer, 0, this.cameraArray);
+  }
+
   render(renderPass: GPURenderPassEncoder, text: MsdfText) {
     if (text && this.pipeline) {
-      renderPass.setPipeline(this.pipeline);
-      renderPass.setBindGroup(1, text.font.bindGroup);
-      renderPass.setBindGroup(2, text.bindGroup);
-      renderPass.draw(4, text.measurements.printedCharCount);
+      if (!text.renderBundle) {
+        const encoder = this.device.createRenderBundleEncoder(this.renderBundleDescriptor);
+        encoder.setPipeline(this.pipeline);
+        encoder.setBindGroup(0, text.font.bindGroup);
+        encoder.setBindGroup(1, text.bindGroup);
+        encoder.draw(4, text.measurements.printedCharCount);
+        text.renderBundle = encoder.finish();
+      }
+
+      renderPass.executeBundles([text.renderBundle]);
     }
   }
 }
