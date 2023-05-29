@@ -18,9 +18,14 @@ const msdfTextShader = /*wgsl*/`
 
   struct Char {
     texOffset: vec2f,
+    texExtent: vec2f,
     size: vec2f,
     offset: vec2f,
-    texPage: f32,
+  };
+
+  struct FormattedText {
+    scale: f32,
+    chars: array<vec3f>,
   };
 
   struct Camera {
@@ -31,19 +36,19 @@ const msdfTextShader = /*wgsl*/`
   @group(0) @binding(2) var<storage> chars: array<Char>;
 
   @group(1) @binding(0) var<uniform> camera: Camera;
-  @group(1) @binding(1) var<storage> text: array<vec3f>;
+  @group(1) @binding(1) var<storage> text: FormattedText;
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
-    let textElement = text[input.instance];
+    let textElement = text.chars[input.instance];
     let char = chars[u32(textElement.z)];
-    let charPos = pos[input.vertex] * char.size + textElement.xy + char.offset;
+    let charPos = (pos[input.vertex] * char.size + textElement.xy + char.offset) * text.scale;
 
     var output : VertexOutput;
     output.position = camera.projection * camera.view * vec4f(charPos, 0, 1);
 
     output.texcoord = pos[input.vertex] * vec2f(1, -1);
-    output.texcoord *= char.size;
+    output.texcoord *= char.texExtent;
     output.texcoord += char.texOffset;
     return output;
   }
@@ -82,10 +87,11 @@ const msdfTextShader = /*wgsl*/`
       discard;
     }
 
-    return vec4(1, 1, 1, alpha);
+    return vec4f(1, 1, 1, alpha);
   }
 `;
 
+// The kerning map
 type KerningMap = Map<number, Map<number, number>>;
 
 export class MsdfFont {
@@ -103,6 +109,19 @@ export class MsdfFont {
     if (!char) { char = this.defaultChar; }
     return char;
   }
+
+  // Gets the distance in pixels a line should advance for a given character code. If the upcoming
+  // character code is given any kerning between the two characters will be taken into account.
+  getXAdvance(charCode: number, nextCharCode: number = -1): number {
+    const char = this.getChar(charCode);
+    if (nextCharCode >= 0) {
+      const kerning = this.kernings.get(charCode);
+      if (kerning) {
+        return char.xadvance + (kerning.get(nextCharCode) ?? 0);
+      }
+    }
+    return char.xadvance;
+  }
 };
 
 export interface MsdfTextMeasurements {
@@ -116,6 +135,11 @@ export class MsdfText {
   public renderBundle: GPURenderBundle;
 
   constructor(public bindGroup: GPUBindGroup, public measurements: MsdfTextMeasurements, public font: MsdfFont) {}
+};
+
+export interface MsdfTextFormattingOptions {
+  centered?: boolean,
+  pixelScale?: number,
 };
 
 export class MsdfTextRenderer {
@@ -248,8 +272,8 @@ export class MsdfTextRenderer {
 
     const charsArray = new Float32Array(charsBuffer.getMappedRange());
 
-    const w = 1 / json.common.scaleW;
-    const h = 1 / json.common.scaleH;
+    const u = 1 / json.common.scaleW;
+    const v = 1 / json.common.scaleH;
 
     const chars: { [x: number]: any } = {};
 
@@ -257,14 +281,15 @@ export class MsdfTextRenderer {
     for (const [i, char] of json.chars.entries()) {
       chars[char.id] = char;
       chars[char.id].charIndex = i;
-      chars[char.id].xadvance *= w;
-      charsArray[offset] = char.x * w;
-      charsArray[offset+1] = char.y * h;
-      charsArray[offset+2] = char.width * w;
-      charsArray[offset+3] = char.height * h;
-      charsArray[offset+4] = char.xoffset * w;
-      charsArray[offset+5] = -char.yoffset * h;
-      charsArray[offset+6] = char.page;
+      //chars[char.id].xadvance *= w;
+      charsArray[offset] = char.x * u; // texOffset.x
+      charsArray[offset+1] = char.y * v; // texOffset.y
+      charsArray[offset+2] = char.width * u; // texExtent.x
+      charsArray[offset+3] = char.height * v; // texExtent.y
+      charsArray[offset+4] = char.width; // size.x
+      charsArray[offset+5] = char.height; // size.y
+      charsArray[offset+6] = char.xoffset; // offset.x
+      charsArray[offset+7] = -char.yoffset; // offset.y
       offset += 8;
     }
 
@@ -296,26 +321,27 @@ export class MsdfTextRenderer {
           charKerning = new Map<number, number>();
           kernings.set(kearning.first, charKerning);
         }
-        charKerning.set(kearning.second, kearning.amount * w);
+        charKerning.set(kearning.second, kearning.amount);
       }
     }
 
-    return new MsdfFont(bindGroup, json.common.lineHeight * h, chars, kernings);
+    return new MsdfFont(bindGroup, json.common.lineHeight, chars, kernings);
   }
 
-  formatText(font: MsdfFont, text: string, centered: boolean = false): MsdfText {
+  formatText(font: MsdfFont, text: string, options: MsdfTextFormattingOptions = {}): MsdfText {
     const textBuffer = this.device.createBuffer({
       label: 'msdf text buffer',
-      size: text.length * Float32Array.BYTES_PER_ELEMENT * 8,
+      size: (text.length + 1) * Float32Array.BYTES_PER_ELEMENT * 4,
       usage: GPUBufferUsage.STORAGE,
       mappedAtCreation: true,
     });
 
     const textArray = new Float32Array(textBuffer.getMappedRange());
-    let offset = 0;
+    textArray[0] = options.pixelScale ?? (1/512);
+    let offset = 4;
 
     let measurements: MsdfTextMeasurements;
-    if (centered) {
+    if (options.centered) {
       measurements = this.measureText(font, text);
 
       this.measureText(font, text, (textX: number, textY: number, line: number, char: any) => {
@@ -372,28 +398,17 @@ export class MsdfTextRenderer {
           maxWidth = Math.max(maxWidth, textOffsetX);
           textOffsetX = 0;
           textOffsetY -= font.lineHeight
-          continue;
         case 13: // CR
-          continue;
+          break;
         case 32: // Space
-          // For spaces, just advance the offset without actually adding a
-          // character.
-          let char = font.getChar(charCode);
-          textOffsetX += char.xadvance;
-          continue;
+          // For spaces, advance the offset without actually adding a character.
+          textOffsetX += font.getXAdvance(charCode);
+          break;
         default: {
-          let char = font.getChar(charCode);
           if (charCallback) {
-            charCallback(textOffsetX, textOffsetY, line, char);
+            charCallback(textOffsetX, textOffsetY, line, font.getChar(charCode));
           }
-
-          let advance = char.xadvance;
-          const kerning = font.kernings.get(charCode);
-          if (kerning) {
-            advance += kerning.get(nextCharCode) ?? 0;
-          }
-
-          textOffsetX += advance;
+          textOffsetX += font.getXAdvance(charCode, nextCharCode);
           printedCharCount++;
         }
       }
