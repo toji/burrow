@@ -1,4 +1,4 @@
-import { Mat4Like } from "gl-matrix";
+import { Mat4, Mat4Like } from "../../../node_modules/gl-matrix/dist/esm/index.js";
 import { WebGpuTextureLoader } from "../../../third-party/hoard-gpu/dist/texture/webgpu/webgpu-texture-loader.js";
 
 const msdfTextShader = /*wgsl*/`
@@ -24,6 +24,7 @@ const msdfTextShader = /*wgsl*/`
   };
 
   struct FormattedText {
+    model: mat4x4f,
     scale: f32,
     chars: array<vec3f>,
   };
@@ -45,7 +46,7 @@ const msdfTextShader = /*wgsl*/`
     let charPos = (pos[input.vertex] * char.size + textElement.xy + char.offset) * text.scale;
 
     var output : VertexOutput;
-    output.position = camera.projection * camera.view * vec4f(charPos, 0, 1);
+    output.position = camera.projection * camera.view * text.model * vec4f(charPos, 0, 1);
 
     output.texcoord = pos[input.vertex] * vec2f(1, -1);
     output.texcoord *= char.texExtent;
@@ -134,7 +135,11 @@ export interface MsdfTextMeasurements {
 export class MsdfText {
   public renderBundle: GPURenderBundle;
 
-  constructor(public bindGroup: GPUBindGroup, public measurements: MsdfTextMeasurements, public font: MsdfFont) {}
+  constructor(public device: GPUDevice, public bindGroup: GPUBindGroup, public measurements: MsdfTextMeasurements, public font: MsdfFont, public textBuffer: GPUBuffer) {}
+
+  setTransform(matrix: Float32Array) {
+    this.device.queue.writeBuffer(this.textBuffer, 0, matrix, 0, 16);
+  }
 };
 
 export interface MsdfTextFormattingOptions {
@@ -331,14 +336,15 @@ export class MsdfTextRenderer {
   formatText(font: MsdfFont, text: string, options: MsdfTextFormattingOptions = {}): MsdfText {
     const textBuffer = this.device.createBuffer({
       label: 'msdf text buffer',
-      size: (text.length + 1) * Float32Array.BYTES_PER_ELEMENT * 4,
-      usage: GPUBufferUsage.STORAGE,
+      size: (text.length + 5) * Float32Array.BYTES_PER_ELEMENT * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
 
     const textArray = new Float32Array(textBuffer.getMappedRange());
-    textArray[0] = options.pixelScale ?? (1/512);
-    let offset = 4;
+    Mat4.identity(textArray);
+    textArray[16] = options.pixelScale ?? (1/512);
+    let offset = 20;
 
     let measurements: MsdfTextMeasurements;
     if (options.centered) {
@@ -375,7 +381,7 @@ export class MsdfTextRenderer {
       }]
     });
 
-    return new MsdfText(bindGroup, measurements, font);
+    return new MsdfText(this.device, bindGroup, measurements, font, textBuffer);
   }
 
   measureText(font: MsdfFont, text: string, charCallback?: (x: number, y: number, line: number, char: any) => void ): MsdfTextMeasurements {
