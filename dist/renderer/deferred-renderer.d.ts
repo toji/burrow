@@ -15,6 +15,7 @@ import { RenderSkin } from '../geometry/skin.js';
 import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
+import { MsdfText, MsdfTextRenderer } from './render-utils/msdf-text.js';
 export declare enum DebugViewType {
     none = "none",
     rgba = "rgba",
@@ -89,10 +90,12 @@ export declare class DeferredRenderer extends RendererBase {
     tonemapRenderer: TonemapRenderer;
     bloomRenderer: BloomRenderer;
     ssaoRenderer: SsaoRenderer;
+    textRenderer: MsdfTextRenderer;
     computeSkinner: ComputeSkinningManager;
     defaultMaterial: RenderMaterial;
     deferredRenderSetProvider: DeferredRenderSetProvider;
     forwardRenderSetProvider: ForwardRenderSetProvider;
+    activeText: MsdfText;
     constructor(device: GPUDevice);
     updateFrameBindGroup(): void;
     get environment(): GPUTexture;

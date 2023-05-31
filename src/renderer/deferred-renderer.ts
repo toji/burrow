@@ -20,6 +20,7 @@ import { AnimationTarget } from '../animation/animation.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
 import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
+import { MsdfFont, MsdfText, MsdfTextRenderer } from './render-utils/msdf-text.js';
 
 export enum DebugViewType {
   none = "none",
@@ -246,12 +247,15 @@ export class DeferredRenderer extends RendererBase {
   tonemapRenderer: TonemapRenderer;
   bloomRenderer: BloomRenderer;
   ssaoRenderer: SsaoRenderer;
+  textRenderer: MsdfTextRenderer;
   computeSkinner: ComputeSkinningManager;
 
   defaultMaterial: RenderMaterial;
 
   deferredRenderSetProvider: DeferredRenderSetProvider;
   forwardRenderSetProvider: ForwardRenderSetProvider;
+
+  activeText: MsdfText;
 
   constructor(device: GPUDevice) {
     super(device);
@@ -317,6 +321,7 @@ export class DeferredRenderer extends RendererBase {
     this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
     this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
     this.ssaoRenderer = new SsaoRenderer(device, this.frameBindGroupLayout, 'rgba8unorm');
+    this.textRenderer = new MsdfTextRenderer(device, 'rgb10a2unorm', this.depthFormat);
     this.computeSkinner = new ComputeSkinningManager(this);
 
     this.defaultMaterial = this.createMaterial({
@@ -521,6 +526,8 @@ export class DeferredRenderer extends RendererBase {
     cameraArray.set([performance.now(), this.zNear, this.zFar], 67);
 
     this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
+
+    this.textRenderer.updateCamera(this.projection, camera.viewMatrix);
   }
 
   drawRenderSet(renderPass: GPURenderPassEncoder, renderSet: RenderSet) {
@@ -646,6 +653,8 @@ export class DeferredRenderer extends RendererBase {
     }
 
     this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
+
+    this.textRenderer.render(forwardPass, this.activeText);
 
     forwardPass.end();
 

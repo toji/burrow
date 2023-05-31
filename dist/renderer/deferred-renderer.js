@@ -11,6 +11,7 @@ import { getForwardShader } from './shaders/forward.js';
 import { ComputeSkinningManager } from './render-utils/compute-skinning.js';
 import { SsaoRenderer } from './render-utils/ssao.js';
 import { FullscreenQuadVertexState } from './render-utils/fullscreen-quad.js';
+import { MsdfTextRenderer } from './render-utils/msdf-text.js';
 export var DebugViewType;
 (function (DebugViewType) {
     DebugViewType["none"] = "none";
@@ -194,10 +195,12 @@ export class DeferredRenderer extends RendererBase {
     tonemapRenderer;
     bloomRenderer;
     ssaoRenderer;
+    textRenderer;
     computeSkinner;
     defaultMaterial;
     deferredRenderSetProvider;
     forwardRenderSetProvider;
+    activeText;
     constructor(device) {
         super(device);
         this.textureVisualizer = new TextureVisualizer(device);
@@ -255,6 +258,7 @@ export class DeferredRenderer extends RendererBase {
         this.tonemapRenderer = new TonemapRenderer(device, navigator.gpu.getPreferredCanvasFormat());
         this.bloomRenderer = new BloomRenderer(device, 'rgb10a2unorm');
         this.ssaoRenderer = new SsaoRenderer(device, this.frameBindGroupLayout, 'rgba8unorm');
+        this.textRenderer = new MsdfTextRenderer(device, 'rgb10a2unorm', this.depthFormat);
         this.computeSkinner = new ComputeSkinningManager(this);
         this.defaultMaterial = this.createMaterial({
             label: 'Default Material',
@@ -433,6 +437,7 @@ export class DeferredRenderer extends RendererBase {
         cameraArray.set(camera.position, 64);
         cameraArray.set([performance.now(), this.zNear, this.zFar], 67);
         this.device.queue.writeBuffer(this.cameraBuffer, 0, cameraArray);
+        this.textRenderer.updateCamera(this.projection, camera.viewMatrix);
     }
     drawRenderSet(renderPass, renderSet) {
         if (!renderSet.totalInstanceCount) {
@@ -534,6 +539,7 @@ export class DeferredRenderer extends RendererBase {
             this.skyboxRenderer.render(forwardPass);
         }
         this.lightSpriteRenderer.render(forwardPass, this.renderLightManager.pointLightCount);
+        this.textRenderer.render(forwardPass, this.activeText);
         forwardPass.end();
         if (this.enableBloom) {
             this.bloomRenderer.render(encoder);
